@@ -49,6 +49,10 @@ public:
     ShardedConnectionInfo();
     ~ShardedConnectionInfo();
 
+#if defined(_MSC_VER) && _MSC_VER == 1900
+	ShardedConnectionInfo(ShardedConnectionInfo&&) = default;
+#endif
+
     const ChunkVersion getVersion(const std::string& ns) const;
     void setVersion(const std::string& ns, const ChunkVersion& version);
 

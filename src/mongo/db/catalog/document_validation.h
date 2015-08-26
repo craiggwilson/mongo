@@ -65,6 +65,10 @@ public:
         documentValidationDisabled(_txn) = _initialState;
     }
 
+#if defined(_MSC_VER) && _MSC_VER == 1900
+	DisableDocumentValidation(DisableDocumentValidation&&) = default;
+#endif
+
 private:
     OperationContext* const _txn;
     const bool _initialState;
