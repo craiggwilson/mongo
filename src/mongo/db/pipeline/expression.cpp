@@ -2469,6 +2469,74 @@ const char* ExpressionPow::getOpName() const {
     return "$pow";
 }
 
+/* ----------------------- ExpressionRange ---------------------------- */
+
+Value ExpressionRange::evaluateInternal(Variables* vars) const {
+    const size_t n = vpOperand.size();
+
+    const Value startVal = vpOperand[0]->evaluateInternal(vars);
+    const Value countVal = vpOperand[1]->evaluateInternal(vars);
+
+    uassert(29050,
+            str::stream() << "First argument to $range must be a numeric value"
+                          << " but is of type: " << typeName(startVal.getType()),
+            startVal.numeric());
+    uassert(29051,
+            str::stream() << "Second argument to $range must be a numeric value,"
+                          << " but is of type: " << typeName(countVal.getType()),
+            countVal.numeric());
+    uassert(29052,
+            str::stream() << "Second argument to $range can't be represented as"
+                          << " a 32-bit integer: " << countVal.coerceToDouble(),
+            countVal.integral());
+
+    double step;
+    BSONType stepType = NumberInt;
+    if (n == 2) {
+        step = 1.0;
+    }
+    else {
+        Value stepVal = vpOperand[2]->evaluateInternal(vars);
+
+        uassert(29053,
+            str::stream() << "Third argument to $range must be a numeric value,"
+                          << " but is of type: " << typeName(stepVal.getType()),
+            stepVal.numeric());
+
+        stepType = stepVal.getType();
+        step = stepVal.coerceToDouble();
+    }
+
+    const BSONType totalType = Value::getWidestNumeric(startVal.getType(), stepType);
+    const int count = countVal.coerceToInt();
+    double current = startVal.coerceToDouble();
+    vector<Value> output;
+    for (int i = 0; i < count; i++) {
+        Value currentVal;
+        if (totalType == NumberLong) {
+            currentVal = Value(static_cast<long long>(current));
+        } else if (totalType == NumberDouble) {
+            currentVal = Value(current);
+        } else if (totalType == NumberInt) {
+            currentVal = Value::createIntOrLong(current);
+        }
+        else {
+            massert(29054, "$range addition resulted in a non-numeric type", false);
+        }
+
+        output.push_back(std::move(currentVal));
+
+        current += step;
+    }
+
+    return Value(std::move(output));
+}
+
+REGISTER_EXPRESSION(range, ExpressionRange::parse);
+const char* ExpressionRange::getOpName() const {
+    return "$range";
+}
+
 /* ------------------------- ExpressionSecond ----------------------------- */
 
 Value ExpressionSecond::evaluateInternal(Variables* vars) const {

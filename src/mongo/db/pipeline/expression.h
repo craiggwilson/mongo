@@ -1089,6 +1089,13 @@ class ExpressionPow final : public ExpressionFixedArity<ExpressionPow, 2> {
 };
 
 
+class ExpressionRange final : public ExpressionRangedArity<ExpressionRange, 2, 3> {
+public:
+    Value evaluateInternal(Variables* vars) const final;
+    const char* getOpName() const final;
+};
+
+
 class ExpressionSecond final : public ExpressionFixedArity<ExpressionSecond, 1> {
 public:
     Value evaluateInternal(Variables* vars) const final;
