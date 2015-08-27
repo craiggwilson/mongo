@@ -1236,4 +1236,29 @@ public:
         return tm.tm_year + 1900;
     }
 };
+
+class ExpressionZip final : public Expression {
+public:
+    boost::intrusive_ptr<Expression> optimize() final;
+    Value serialize(bool explain) const final;
+    Value evaluateInternal(Variables* vars) const final;
+    void addDependencies(DepsTracker* deps, std::vector<std::string>* path = NULL) const final;
+
+    static boost::intrusive_ptr<Expression> parse(BSONElement expr, const VariablesParseState& vps);
+
+private:
+    ExpressionZip(std::vector<std::string> varNames,
+                     std::vector<Variables::Id> varIds,
+                     boost::intrusive_ptr<Expression> input,
+                     boost::intrusive_ptr<Expression> filter);
+
+    // The names of the variables to set to each element in the array.
+    std::vector<std::string> _varNames;
+    // The id of the variables to set.
+    std::vector<Variables::Id> _varIds;
+    // The arrays to iterate over.
+    boost::intrusive_ptr<Expression> _input;
+    // The expression that combines the input arrays into one.
+    boost::intrusive_ptr<Expression> _each;
+};
 }

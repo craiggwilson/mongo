@@ -3053,4 +3053,144 @@ REGISTER_EXPRESSION(year, ExpressionYear::parse);
 const char* ExpressionYear::getOpName() const {
     return "$year";
 }
+
+/* ------------------------- ExpressionZip ----------------------------- */
+
+REGISTER_EXPRESSION(zip, ExpressionZip::parse);
+intrusive_ptr<Expression> ExpressionZip::parse(BSONElement expr,
+    const VariablesParseState& vpsIn) {
+    verify(str::equals(expr.fieldName(), "$zip"));
+
+    uassert(28900, "$zip only supports an object as its argument", expr.type() == Object);
+
+    // "cond" must be parsed after "as" regardless of BSON order.
+    BSONElement inputElem;
+    BSONElement asElem;
+    BSONElement inElem;
+    for (auto elem : expr.Obj()) {
+        if (str::equals(elem.fieldName(), "input")) {
+            inputElem = elem;
+        }
+        else if (str::equals(elem.fieldName(), "as")) {
+            asElem = elem;
+        }
+        else if (str::equals(elem.fieldName(), "in")) {
+            inElem = elem;
+        }
+        else {
+            uasserted(28901,
+                str::stream() << "Unrecognized parameter to $zip: " << elem.fieldName());
+        }
+    }
+
+    uassert(28902, "Missing 'input' parameter to $zip", !inputElem.eoo());
+    uassert(28903, "Missing 'as' parameter to $zip", !asElem.eoo());
+    uassert(28904, "Missing 'in' parameter to $zip", !inElem.eoo());
+
+    // Parse "input", only has outer variables.
+    uassert(28905, "'input' parameter must be an array in $zip", inputElem.type() == Array);
+    intrusive_ptr<Expression> input = parseOperand(inputElem, vpsIn);
+
+    // Parse "as".
+    uassert(28906, "'as' parameter must be an array in $zip", asElem.type() == Array);
+
+    VariablesParseState vpsSub(vpsIn);  // vpsSub gets our variable, vpsIn doesn't.
+    vector<string> varNames;
+    vector<Variables::Id> varIds;
+    for (auto elem : asElem.Obj()) {
+        string varName = elem.str();
+        Variables::uassertValidNameForUserWrite(varName);
+        Variables::Id varId = vpsSub.defineVariable(varName);
+
+        varNames.push_back(std::move(varName));
+        varIds.push_back(varId);
+    }
+
+    uassert(28907,
+        str::stream() << "number of variable names in 'as' must be 2 but was "
+                      << varIds.size(),
+        varIds.size() == 2);
+
+    // Parse "in", has access to "as" variables.
+    intrusive_ptr<Expression> in = parseOperand(inElem, vpsSub);
+
+    return new ExpressionZip(std::move(varNames), std::move(varIds), std::move(input), std::move(in));
+}
+
+ExpressionZip::ExpressionZip(vector<string> varNames,
+    vector<Variables::Id> varIds,
+    intrusive_ptr<Expression> input,
+    intrusive_ptr<Expression> each)
+    : _varNames(std::move(varNames)),
+      _varIds(std::move(varIds)),
+      _input(std::move(input)),
+      _each(std::move(each)) {}
+
+intrusive_ptr<Expression> ExpressionZip::optimize() {
+    // TODO handle when _input is constant.
+    _input = _input->optimize();
+    _each = _each->optimize();
+    return this;
+}
+
+Value ExpressionZip::serialize(bool explain) const {
+    // TODO this doesn't render correctly...
+    return Value(DOC("$zip" << DOC("input" << _input->serialize(explain) << "as" << _varNames[0]
+        << "in" << _each->serialize(explain))));
+}
+
+Value ExpressionZip::evaluateInternal(Variables* vars) const {
+    const Value input = _input->evaluateInternal(vars);
+
+    uassert(28908,
+        str::stream() << "number of 'input' values must be 2 but was "
+                      << input.getArrayLength(),
+        input.getArrayLength() == 2);
+
+
+    const vector<Value>& inputVals = input.getArray();
+    if (inputVals[0].nullish() || inputVals[1].nullish()) {
+        return Value(BSONNULL);
+    }
+
+    uassert(28909,
+        str::stream() << "the first 'input' to $zip must be an Array but was "
+                     << typeName(inputVals[0].getType()),
+        inputVals[0].getType() == Array);
+    uassert(28910,
+        str::stream() << "the second 'input' to $zip must be an Array but was "
+                     << typeName(inputVals[1].getType()),
+        inputVals[1].getType() == Array);
+
+    const vector<Value>& inputVal1 = inputVals[0].getArray();
+    if(inputVal1.empty()) {
+        return inputVals[0];
+    }
+
+    const vector<Value>& inputVal2 = inputVals[1].getArray();
+    if(inputVal2.empty()) {
+        return inputVals[1];
+    }
+
+    vector<Value>::const_iterator i1;
+    vector<Value>::const_iterator i2;
+    vector<Value> output;
+    for (i1 = inputVal1.begin(), i2 = inputVal2.begin();
+         i1 != inputVal1.end() && i2 != inputVal2.end();
+         ++i1, ++i2) {
+
+        vars->setValue(_varIds[0], *i1);
+        vars->setValue(_varIds[1], *i2);
+
+        Value result = _each->evaluateInternal(vars);
+        output.push_back(std::move(result));
+    }
+
+    return Value(std::move(output));
+}
+
+void ExpressionZip::addDependencies(DepsTracker* deps, vector<string>* path) const {
+    _input->addDependencies(deps);
+    _each->addDependencies(deps);
+}
 }
