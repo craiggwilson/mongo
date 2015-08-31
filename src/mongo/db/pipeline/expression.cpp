@@ -2469,6 +2469,37 @@ const char* ExpressionPow::getOpName() const {
     return "$pow";
 }
 
+/* ----------------------- ExpressionRepeat ---------------------------- */
+
+Value ExpressionRepeat::evaluateInternal(Variables* vars) const {
+    const Value lhs = vpOperand[0]->evaluateInternal(vars);
+    const Value rhs = vpOperand[1]->evaluateInternal(vars);
+
+    if (rhs.nullish()) {
+        return Value(BSONNULL);
+    }
+
+    uassert(19300,
+            str::stream() << "Second argument must be an integral type but "
+                          << "is of type: " << typeName(rhs.getType()),
+            rhs.integral());
+
+    int count = rhs.coerceToInt();
+    vector<Value> output;
+    output.reserve(count);
+    
+    for (int i = 0; i < count; i++) {
+        output.push_back(std::copy(lhs));
+    }
+
+    return Value(std::move(output));
+}
+
+REGISTER_EXPRESSION(repeat, ExpressionRepeat::parse);
+const char* ExpressionRepeat::getOpName() const {
+    return "$repeat";
+}
+
 /* ------------------------- ExpressionSecond ----------------------------- */
 
 Value ExpressionSecond::evaluateInternal(Variables* vars) const {
