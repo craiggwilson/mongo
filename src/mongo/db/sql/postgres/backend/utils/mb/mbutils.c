@@ -84,10 +84,10 @@ static const pg_enc2name *DatabaseEncoding = &pg_enc2name_tbl[PG_SQL_ASCII];
 // static int	pending_client_encoding = PG_SQL_ASCII;
 
 
-// /* Internal functions */
+/* Internal functions */
 // static char *perform_default_encoding_conversion(const char *src,
 // 									int len, bool is_client_to_server);
-// static int	cliplen(const char *str, int len, int limit);
+static int	cliplen(const char *str, int len, int limit);
 
 
 // /*
@@ -810,49 +810,49 @@ pg_mbstrlen_with_len(const char *mbstr, int limit)
 	return len;
 }
 
-// /*
-//  * returns the byte length of a multibyte string
-//  * (not necessarily NULL terminated)
-//  * that is no longer than limit.
-//  * this function does not break multibyte character boundary.
-//  */
-// int
-// pg_mbcliplen(const char *mbstr, int len, int limit)
-// {
-// 	return pg_encoding_mbcliplen(DatabaseEncoding->encoding, mbstr,
-// 								 len, limit);
-// }
+/*
+ * returns the byte length of a multibyte string
+ * (not necessarily NULL terminated)
+ * that is no longer than limit.
+ * this function does not break multibyte character boundary.
+ */
+int
+pg_mbcliplen(const char *mbstr, int len, int limit)
+{
+	return pg_encoding_mbcliplen(DatabaseEncoding->encoding, mbstr,
+								 len, limit);
+}
 
-// /*
-//  * pg_mbcliplen with specified encoding
-//  */
-// int
-// pg_encoding_mbcliplen(int encoding, const char *mbstr,
-// 					  int len, int limit)
-// {
-// 	mblen_converter mblen_fn;
-// 	int			clen = 0;
-// 	int			l;
+/*
+ * pg_mbcliplen with specified encoding
+ */
+int
+pg_encoding_mbcliplen(int encoding, const char *mbstr,
+					  int len, int limit)
+{
+	mblen_converter mblen_fn;
+	int			clen = 0;
+	int			l;
 
-// 	/* optimization for single byte encoding */
-// 	if (pg_encoding_max_length(encoding) == 1)
-// 		return cliplen(mbstr, len, limit);
+	/* optimization for single byte encoding */
+	if (pg_encoding_max_length(encoding) == 1)
+		return cliplen(mbstr, len, limit);
 
-// 	mblen_fn = pg_wchar_table[encoding].mblen;
+	mblen_fn = pg_wchar_table[encoding].mblen;
 
-// 	while (len > 0 && *mbstr)
-// 	{
-// 		l = (*mblen_fn) ((const unsigned char *) mbstr);
-// 		if ((clen + l) > limit)
-// 			break;
-// 		clen += l;
-// 		if (clen == limit)
-// 			break;
-// 		len -= l;
-// 		mbstr += l;
-// 	}
-// 	return clen;
-// }
+	while (len > 0 && *mbstr)
+	{
+		l = (*mblen_fn) ((const unsigned char *) mbstr);
+		if ((clen + l) > limit)
+			break;
+		clen += l;
+		if (clen == limit)
+			break;
+		len -= l;
+		mbstr += l;
+	}
+	return clen;
+}
 
 // /*
 //  * Similar to pg_mbcliplen except the limit parameter specifies the
@@ -882,17 +882,17 @@ pg_mbstrlen_with_len(const char *mbstr, int limit)
 // 	return clen;
 // }
 
-// /* mbcliplen for any single-byte encoding */
-// static int
-// cliplen(const char *str, int len, int limit)
-// {
-// 	int			l = 0;
+/* mbcliplen for any single-byte encoding */
+static int
+cliplen(const char *str, int len, int limit)
+{
+	int			l = 0;
 
-// 	len = Min(len, limit);
-// 	while (l < len && str[l])
-// 		l++;
-// 	return l;
-// }
+	len = Min(len, limit);
+	while (l < len && str[l])
+		l++;
+	return l;
+}
 
 // void
 // SetDatabaseEncoding(int encoding)

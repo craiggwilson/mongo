@@ -185,19 +185,19 @@ static void append_with_tabs(StringInfo buf, const char *str);
 static bool is_log_level_output(int elevel, int log_min_level);
 
 
-// /*
-//  * in_error_recursion_trouble --- are we at risk of infinite error recursion?
-//  *
-//  * This function exists to provide common control of various fallback steps
-//  * that we take if we think we are facing infinite error recursion.  See the
-//  * callers for details.
-//  */
-// bool
-// in_error_recursion_trouble(void)
-// {
-// 	/* Pull the plug if recurse more than once */
-// 	return (recursion_depth > 2);
-// }
+/*
+ * in_error_recursion_trouble --- are we at risk of infinite error recursion?
+ *
+ * This function exists to provide common control of various fallback steps
+ * that we take if we think we are facing infinite error recursion.  See the
+ * callers for details.
+ */
+bool
+in_error_recursion_trouble(void)
+{
+	/* Pull the plug if recurse more than once */
+	return (recursion_depth > 2);
+}
 
 /*
  * One of those fallback steps is to stop trying to localize the error
@@ -1435,56 +1435,56 @@ elog_finish(int elevel, const char *fmt,...)
 // }
 
 
-// /*
-//  * Actual output of the top-of-stack error message
-//  *
-//  * In the ereport(ERROR) case this is called from PostgresMain (or not at all,
-//  * if the error is caught by somebody).  For all other severity levels this
-//  * is called by errfinish.
-//  */
-// void
-// EmitErrorReport(void)
-// {
-// 	ErrorData  *edata = &errordata[errordata_stack_depth];
-// 	MemoryContext oldcontext;
+/*
+ * Actual output of the top-of-stack error message
+ *
+ * In the ereport(ERROR) case this is called from PostgresMain (or not at all,
+ * if the error is caught by somebody).  For all other severity levels this
+ * is called by errfinish.
+ */
+void
+EmitErrorReport(void)
+{
+	ErrorData  *edata = &errordata[errordata_stack_depth];
+	MemoryContext oldcontext;
 
-// 	recursion_depth++;
-// 	CHECK_STACK_DEPTH();
-// 	oldcontext = MemoryContextSwitchTo(edata->assoc_context);
+	recursion_depth++;
+	CHECK_STACK_DEPTH();
+	oldcontext = MemoryContextSwitchTo(edata->assoc_context);
 
-// 	/*
-// 	 * Call hook before sending message to log.  The hook function is allowed
-// 	 * to turn off edata->output_to_server, so we must recheck that afterward.
-// 	 * Making any other change in the content of edata is not considered
-// 	 * supported.
-// 	 *
-// 	 * Note: the reason why the hook can only turn off output_to_server, and
-// 	 * not turn it on, is that it'd be unreliable: we will never get here at
-// 	 * all if errstart() deems the message uninteresting.  A hook that could
-// 	 * make decisions in that direction would have to hook into errstart(),
-// 	 * where it would have much less information available.  emit_log_hook is
-// 	 * intended for custom log filtering and custom log message transmission
-// 	 * mechanisms.
-// 	 *
-// 	 * The log hook has access to both the translated and original English
-// 	 * error message text, which is passed through to allow it to be used as a
-// 	 * message identifier. Note that the original text is not available for
-// 	 * detail, detail_log, hint and context text elements.
-// 	 */
-// 	if (edata->output_to_server && emit_log_hook)
-// 		(*emit_log_hook) (edata);
+	/*
+	 * Call hook before sending message to log.  The hook function is allowed
+	 * to turn off edata->output_to_server, so we must recheck that afterward.
+	 * Making any other change in the content of edata is not considered
+	 * supported.
+	 *
+	 * Note: the reason why the hook can only turn off output_to_server, and
+	 * not turn it on, is that it'd be unreliable: we will never get here at
+	 * all if errstart() deems the message uninteresting.  A hook that could
+	 * make decisions in that direction would have to hook into errstart(),
+	 * where it would have much less information available.  emit_log_hook is
+	 * intended for custom log filtering and custom log message transmission
+	 * mechanisms.
+	 *
+	 * The log hook has access to both the translated and original English
+	 * error message text, which is passed through to allow it to be used as a
+	 * message identifier. Note that the original text is not available for
+	 * detail, detail_log, hint and context text elements.
+	 */
+	if (edata->output_to_server && emit_log_hook)
+		(*emit_log_hook) (edata);
 
-// 	/* Send to server log, if enabled */
-// 	if (edata->output_to_server)
-// 		send_message_to_server_log(edata);
+	/* Send to server log, if enabled */
+	if (edata->output_to_server)
+		send_message_to_server_log(edata);
 
-// 	/* Send to client, if enabled */
-// 	if (edata->output_to_client)
-// 		send_message_to_frontend(edata);
+	/* Send to client, if enabled */
+	if (edata->output_to_client)
+		send_message_to_frontend(edata);
 
-// 	MemoryContextSwitchTo(oldcontext);
-// 	recursion_depth--;
-// }
+	MemoryContextSwitchTo(oldcontext);
+	recursion_depth--;
+}
 
 // /*
 //  * CopyErrorData --- obtain a copy of the topmost error stack entry
@@ -1722,63 +1722,63 @@ elog_finish(int elevel, const char *fmt,...)
 // 	PG_RE_THROW();
 // }
 
-// /*
-//  * pg_re_throw --- out-of-line implementation of PG_RE_THROW() macro
-//  */
-// void
-// pg_re_throw(void)
-// {
-// 	/* If possible, throw the error to the next outer setjmp handler */
-// 	if (PG_exception_stack != NULL)
-// 		siglongjmp(*PG_exception_stack, 1);
-// 	else
-// 	{
-// 		/*
-// 		 * If we get here, elog(ERROR) was thrown inside a PG_TRY block, which
-// 		 * we have now exited only to discover that there is no outer setjmp
-// 		 * handler to pass the error to.  Had the error been thrown outside
-// 		 * the block to begin with, we'd have promoted the error to FATAL, so
-// 		 * the correct behavior is to make it FATAL now; that is, emit it and
-// 		 * then call proc_exit.
-// 		 */
-// 		ErrorData  *edata = &errordata[errordata_stack_depth];
+/*
+ * pg_re_throw --- out-of-line implementation of PG_RE_THROW() macro
+ */
+void
+pg_re_throw(void)
+{
+	/* If possible, throw the error to the next outer setjmp handler */
+	if (PG_exception_stack != NULL)
+		siglongjmp(*PG_exception_stack, 1);
+	else
+	{
+		/*
+		 * If we get here, elog(ERROR) was thrown inside a PG_TRY block, which
+		 * we have now exited only to discover that there is no outer setjmp
+		 * handler to pass the error to.  Had the error been thrown outside
+		 * the block to begin with, we'd have promoted the error to FATAL, so
+		 * the correct behavior is to make it FATAL now; that is, emit it and
+		 * then call proc_exit.
+		 */
+		ErrorData  *edata = &errordata[errordata_stack_depth];
 
-// 		Assert(errordata_stack_depth >= 0);
-// 		Assert(edata->elevel == ERROR);
-// 		edata->elevel = FATAL;
+		Assert(errordata_stack_depth >= 0);
+		Assert(edata->elevel == ERROR);
+		edata->elevel = FATAL;
 
-// 		/*
-// 		 * At least in principle, the increase in severity could have changed
-// 		 * where-to-output decisions, so recalculate.  This should stay in
-// 		 * sync with errstart(), which see for comments.
-// 		 */
-// 		if (IsPostmasterEnvironment)
-// 			edata->output_to_server = is_log_level_output(FATAL,
-// 														  log_min_messages);
-// 		else
-// 			edata->output_to_server = (FATAL >= log_min_messages);
-// 		if (whereToSendOutput == DestRemote)
-// 		{
-// 			if (ClientAuthInProgress)
-// 				edata->output_to_client = true;
-// 			else
-// 				edata->output_to_client = (FATAL >= client_min_messages);
-// 		}
+		/*
+		 * At least in principle, the increase in severity could have changed
+		 * where-to-output decisions, so recalculate.  This should stay in
+		 * sync with errstart(), which see for comments.
+		 */
+		if (IsPostmasterEnvironment)
+			edata->output_to_server = is_log_level_output(FATAL,
+														  log_min_messages);
+		else
+			edata->output_to_server = (FATAL >= log_min_messages);
+		if (whereToSendOutput == DestRemote)
+		{
+			if (ClientAuthInProgress)
+				edata->output_to_client = true;
+			else
+				edata->output_to_client = (FATAL >= client_min_messages);
+		}
 
-// 		/*
-// 		 * We can use errfinish() for the rest, but we don't want it to call
-// 		 * any error context routines a second time.  Since we know we are
-// 		 * about to exit, it should be OK to just clear the context stack.
-// 		 */
-// 		error_context_stack = NULL;
+		/*
+		 * We can use errfinish() for the rest, but we don't want it to call
+		 * any error context routines a second time.  Since we know we are
+		 * about to exit, it should be OK to just clear the context stack.
+		 */
+		error_context_stack = NULL;
 
-// 		errfinish(0);
-// 	}
+		errfinish(0);
+	}
 
-// 	/* Doesn't return ... */
-// 	ExceptionalCondition("pg_re_throw tried to return", "FailedAssertion",
-// 						 __FILE__, __LINE__);
-// }
+	/* Doesn't return ... */
+	ExceptionalCondition("pg_re_throw tried to return", "FailedAssertion",
+						 __FILE__, __LINE__);
+}
 
 
 // /*
@@ -1905,7 +1905,7 @@ elog_finish(int elevel, const char *fmt,...)
 // }
 
 
-// #ifdef HAVE_SYSLOG
+#ifdef HAVE_SYSLOG
 
 // /*
 //  * Set or update the parameters for syslog logging
@@ -1940,114 +1940,114 @@ elog_finish(int elevel, const char *fmt,...)
 // }
 
 
-// /*
-//  * Write a message line to syslog
-//  */
-// static void
-// write_syslog(int level, const char *line)
-// {
-// 	static unsigned long seq = 0;
+/*
+ * Write a message line to syslog
+ */
+static void
+write_syslog(int level, const char *line)
+{
+	static unsigned long seq = 0;
 
-// 	int			len;
-// 	const char *nlpos;
+	int			len;
+	const char *nlpos;
 
-// 	/* Open syslog connection if not done yet */
-// 	if (!openlog_done)
-// 	{
-// 		openlog(syslog_ident ? syslog_ident : "postgres",
-// 				LOG_PID | LOG_NDELAY | LOG_NOWAIT,
-// 				syslog_facility);
-// 		openlog_done = true;
-// 	}
+	/* Open syslog connection if not done yet */
+	if (!openlog_done)
+	{
+		openlog(syslog_ident ? syslog_ident : "postgres",
+				LOG_PID | LOG_NDELAY | LOG_NOWAIT,
+				syslog_facility);
+		openlog_done = true;
+	}
 
-// 	/*
-// 	 * We add a sequence number to each log message to suppress "same"
-// 	 * messages.
-// 	 */
-// 	seq++;
+	/*
+	 * We add a sequence number to each log message to suppress "same"
+	 * messages.
+	 */
+	seq++;
 
-// 	/*
-// 	 * Our problem here is that many syslog implementations don't handle long
-// 	 * messages in an acceptable manner. While this function doesn't help that
-// 	 * fact, it does work around by splitting up messages into smaller pieces.
-// 	 *
-// 	 * We divide into multiple syslog() calls if message is too long or if the
-// 	 * message contains embedded newline(s).
-// 	 */
-// 	len = strlen(line);
-// 	nlpos = strchr(line, '\n');
-// 	if (syslog_split_messages && (len > PG_SYSLOG_LIMIT || nlpos != NULL))
-// 	{
-// 		int			chunk_nr = 0;
+	/*
+	 * Our problem here is that many syslog implementations don't handle long
+	 * messages in an acceptable manner. While this function doesn't help that
+	 * fact, it does work around by splitting up messages into smaller pieces.
+	 *
+	 * We divide into multiple syslog() calls if message is too long or if the
+	 * message contains embedded newline(s).
+	 */
+	len = strlen(line);
+	nlpos = strchr(line, '\n');
+	if (syslog_split_messages && (len > PG_SYSLOG_LIMIT || nlpos != NULL))
+	{
+		int			chunk_nr = 0;
 
-// 		while (len > 0)
-// 		{
-// 			char		buf[PG_SYSLOG_LIMIT + 1];
-// 			int			buflen;
-// 			int			i;
+		while (len > 0)
+		{
+			char		buf[PG_SYSLOG_LIMIT + 1];
+			int			buflen;
+			int			i;
 
-// 			/* if we start at a newline, move ahead one char */
-// 			if (line[0] == '\n')
-// 			{
-// 				line++;
-// 				len--;
-// 				/* we need to recompute the next newline's position, too */
-// 				nlpos = strchr(line, '\n');
-// 				continue;
-// 			}
+			/* if we start at a newline, move ahead one char */
+			if (line[0] == '\n')
+			{
+				line++;
+				len--;
+				/* we need to recompute the next newline's position, too */
+				nlpos = strchr(line, '\n');
+				continue;
+			}
 
-// 			/* copy one line, or as much as will fit, to buf */
-// 			if (nlpos != NULL)
-// 				buflen = nlpos - line;
-// 			else
-// 				buflen = len;
-// 			buflen = Min(buflen, PG_SYSLOG_LIMIT);
-// 			memcpy(buf, line, buflen);
-// 			buf[buflen] = '\0';
+			/* copy one line, or as much as will fit, to buf */
+			if (nlpos != NULL)
+				buflen = nlpos - line;
+			else
+				buflen = len;
+			buflen = Min(buflen, PG_SYSLOG_LIMIT);
+			memcpy(buf, line, buflen);
+			buf[buflen] = '\0';
 
-// 			/* trim to multibyte letter boundary */
-// 			buflen = pg_mbcliplen(buf, buflen, buflen);
-// 			if (buflen <= 0)
-// 				return;
-// 			buf[buflen] = '\0';
+			/* trim to multibyte letter boundary */
+			buflen = pg_mbcliplen(buf, buflen, buflen);
+			if (buflen <= 0)
+				return;
+			buf[buflen] = '\0';
 
-// 			/* already word boundary? */
-// 			if (line[buflen] != '\0' &&
-// 				!isspace((unsigned char) line[buflen]))
-// 			{
-// 				/* try to divide at word boundary */
-// 				i = buflen - 1;
-// 				while (i > 0 && !isspace((unsigned char) buf[i]))
-// 					i--;
+			/* already word boundary? */
+			if (line[buflen] != '\0' &&
+				!isspace((unsigned char) line[buflen]))
+			{
+				/* try to divide at word boundary */
+				i = buflen - 1;
+				while (i > 0 && !isspace((unsigned char) buf[i]))
+					i--;
 
-// 				if (i > 0)		/* else couldn't divide word boundary */
-// 				{
-// 					buflen = i;
-// 					buf[i] = '\0';
-// 				}
-// 			}
+				if (i > 0)		/* else couldn't divide word boundary */
+				{
+					buflen = i;
+					buf[i] = '\0';
+				}
+			}
 
-// 			chunk_nr++;
+			chunk_nr++;
 
-// 			if (syslog_sequence_numbers)
-// 				syslog(level, "[%lu-%d] %s", seq, chunk_nr, buf);
-// 			else
-// 				syslog(level, "[%d] %s", chunk_nr, buf);
+			if (syslog_sequence_numbers)
+				syslog(level, "[%lu-%d] %s", seq, chunk_nr, buf);
+			else
+				syslog(level, "[%d] %s", chunk_nr, buf);
 
-// 			line += buflen;
-// 			len -= buflen;
-// 		}
-// 	}
-// 	else
-// 	{
-// 		/* message short enough */
-// 		if (syslog_sequence_numbers)
-// 			syslog(level, "[%lu] %s", seq, line);
-// 		else
-// 			syslog(level, "%s", line);
-// 	}
-// }
-// #endif							/* HAVE_SYSLOG */
+			line += buflen;
+			len -= buflen;
+		}
+	}
+	else
+	{
+		/* message short enough */
+		if (syslog_sequence_numbers)
+			syslog(level, "[%lu] %s", seq, line);
+		else
+			syslog(level, "%s", line);
+	}
+}
+#endif							/* HAVE_SYSLOG */
 
 // #ifdef WIN32
 // /*
@@ -2158,688 +2158,688 @@ elog_finish(int elevel, const char *fmt,...)
 // }
 // #endif							/* WIN32 */
 
-// static void
-// write_console(const char *line, int len)
-// {
-// 	int			rc;
-
-// #ifdef WIN32
-
-// 	/*
-// 	 * Try to convert the message to UTF16 and write it with WriteConsoleW().
-// 	 * Fall back on write() if anything fails.
-// 	 *
-// 	 * In contrast to write_eventlog(), don't skip straight to write() based
-// 	 * on the applicable encodings.  Unlike WriteConsoleW(), write() depends
-// 	 * on the suitability of the console output code page.  Since we put
-// 	 * stderr into binary mode in SubPostmasterMain(), write() skips the
-// 	 * necessary translation anyway.
-// 	 *
-// 	 * WriteConsoleW() will fail if stderr is redirected, so just fall through
-// 	 * to writing unconverted to the logfile in this case.
-// 	 *
-// 	 * Since we palloc the structure required for conversion, also fall
-// 	 * through to writing unconverted if we have not yet set up
-// 	 * CurrentMemoryContext.
-// 	 */
-// 	if (!in_error_recursion_trouble() &&
-// 		!redirection_done &&
-// 		CurrentMemoryContext != NULL)
-// 	{
-// 		WCHAR	   *utf16;
-// 		int			utf16len;
-
-// 		utf16 = pgwin32_message_to_UTF16(line, len, &utf16len);
-// 		if (utf16 != NULL)
-// 		{
-// 			HANDLE		stdHandle;
-// 			DWORD		written;
-
-// 			stdHandle = GetStdHandle(STD_ERROR_HANDLE);
-// 			if (WriteConsoleW(stdHandle, utf16, utf16len, &written, NULL))
-// 			{
-// 				pfree(utf16);
-// 				return;
-// 			}
-
-// 			/*
-// 			 * In case WriteConsoleW() failed, fall back to writing the
-// 			 * message unconverted.
-// 			 */
-// 			pfree(utf16);
-// 		}
-// 	}
-// #else
-
-// 	/*
-// 	 * Conversion on non-win32 platforms is not implemented yet. It requires
-// 	 * non-throw version of pg_do_encoding_conversion(), that converts
-// 	 * unconvertable characters to '?' without errors.
-// 	 */
-// #endif
-
-// 	/*
-// 	 * We ignore any error from write() here.  We have no useful way to report
-// 	 * it ... certainly whining on stderr isn't likely to be productive.
-// 	 */
-// 	rc = write(fileno(stderr), line, len);
-// 	(void) rc;
-// }
-
-// /*
-//  * setup formatted_log_time, for consistent times between CSV and regular logs
-//  */
-// static void
-// setup_formatted_log_time(void)
-// {
-// 	pg_time_t	stamp_time;
-// 	char		msbuf[13];
-
-// 	if (!saved_timeval_set)
-// 	{
-// 		gettimeofday(&saved_timeval, NULL);
-// 		saved_timeval_set = true;
-// 	}
-
-// 	stamp_time = (pg_time_t) saved_timeval.tv_sec;
-
-// 	/*
-// 	 * Note: we expect that guc.c will ensure that log_timezone is set up (at
-// 	 * least with a minimal GMT value) before Log_line_prefix can become
-// 	 * nonempty or CSV mode can be selected.
-// 	 */
-// 	pg_strftime(formatted_log_time, FORMATTED_TS_LEN,
-// 	/* leave room for milliseconds... */
-// 				"%Y-%m-%d %H:%M:%S     %Z",
-// 				pg_localtime(&stamp_time, log_timezone));
-
-// 	/* 'paste' milliseconds into place... */
-// 	sprintf(msbuf, ".%03d", (int) (saved_timeval.tv_usec / 1000));
-// 	memcpy(formatted_log_time + 19, msbuf, 4);
-// }
-
-// /*
-//  * setup formatted_start_time
-//  */
-// static void
-// setup_formatted_start_time(void)
-// {
-// 	pg_time_t	stamp_time = (pg_time_t) MyStartTime;
-
-// 	/*
-// 	 * Note: we expect that guc.c will ensure that log_timezone is set up (at
-// 	 * least with a minimal GMT value) before Log_line_prefix can become
-// 	 * nonempty or CSV mode can be selected.
-// 	 */
-// 	pg_strftime(formatted_start_time, FORMATTED_TS_LEN,
-// 				"%Y-%m-%d %H:%M:%S %Z",
-// 				pg_localtime(&stamp_time, log_timezone));
-// }
-
-// /*
-//  * process_log_prefix_padding --- helper function for processing the format
-//  * string in log_line_prefix
-//  *
-//  * Note: This function returns NULL if it finds something which
-//  * it deems invalid in the format string.
-//  */
-// static const char *
-// process_log_prefix_padding(const char *p, int *ppadding)
-// {
-// 	int			paddingsign = 1;
-// 	int			padding = 0;
-
-// 	if (*p == '-')
-// 	{
-// 		p++;
-
-// 		if (*p == '\0')			/* Did the buf end in %- ? */
-// 			return NULL;
-// 		paddingsign = -1;
-// 	}
-
-// 	/* generate an int version of the numerical string */
-// 	while (*p >= '0' && *p <= '9')
-// 		padding = padding * 10 + (*p++ - '0');
-
-// 	/* format is invalid if it ends with the padding number */
-// 	if (*p == '\0')
-// 		return NULL;
-
-// 	padding *= paddingsign;
-// 	*ppadding = padding;
-// 	return p;
-// }
-
-// /*
-//  * Format tag info for log lines; append to the provided buffer.
-//  */
-// static void
-// log_line_prefix(StringInfo buf, ErrorData *edata)
-// {
-// 	/* static counter for line numbers */
-// 	static long log_line_number = 0;
-
-// 	/* has counter been reset in current process? */
-// 	static int	log_my_pid = 0;
-// 	int			padding;
-// 	const char *p;
-
-// 	/*
-// 	 * This is one of the few places where we'd rather not inherit a static
-// 	 * variable's value from the postmaster.  But since we will, reset it when
-// 	 * MyProcPid changes. MyStartTime also changes when MyProcPid does, so
-// 	 * reset the formatted start timestamp too.
-// 	 */
-// 	if (log_my_pid != MyProcPid)
-// 	{
-// 		log_line_number = 0;
-// 		log_my_pid = MyProcPid;
-// 		formatted_start_time[0] = '\0';
-// 	}
-// 	log_line_number++;
-
-// 	if (Log_line_prefix == NULL)
-// 		return;					/* in case guc hasn't run yet */
-
-// 	for (p = Log_line_prefix; *p != '\0'; p++)
-// 	{
-// 		if (*p != '%')
-// 		{
-// 			/* literal char, just copy */
-// 			appendStringInfoChar(buf, *p);
-// 			continue;
-// 		}
-
-// 		/* must be a '%', so skip to the next char */
-// 		p++;
-// 		if (*p == '\0')
-// 			break;				/* format error - ignore it */
-// 		else if (*p == '%')
-// 		{
-// 			/* string contains %% */
-// 			appendStringInfoChar(buf, '%');
-// 			continue;
-// 		}
-
-
-// 		/*
-// 		 * Process any formatting which may exist after the '%'.  Note that
-// 		 * process_log_prefix_padding moves p past the padding number if it
-// 		 * exists.
-// 		 *
-// 		 * Note: Since only '-', '0' to '9' are valid formatting characters we
-// 		 * can do a quick check here to pre-check for formatting. If the char
-// 		 * is not formatting then we can skip a useless function call.
-// 		 *
-// 		 * Further note: At least on some platforms, passing %*s rather than
-// 		 * %s to appendStringInfo() is substantially slower, so many of the
-// 		 * cases below avoid doing that unless non-zero padding is in fact
-// 		 * specified.
-// 		 */
-// 		if (*p > '9')
-// 			padding = 0;
-// 		else if ((p = process_log_prefix_padding(p, &padding)) == NULL)
-// 			break;
-
-// 		/* process the option */
-// 		switch (*p)
-// 		{
-// 			case 'a':
-// 				if (MyProcPort)
-// 				{
-// 					const char *appname = application_name;
-
-// 					if (appname == NULL || *appname == '\0')
-// 						appname = _("[unknown]");
-// 					if (padding != 0)
-// 						appendStringInfo(buf, "%*s", padding, appname);
-// 					else
-// 						appendStringInfoString(buf, appname);
-// 				}
-// 				else if (padding != 0)
-// 					appendStringInfoSpaces(buf,
-// 										   padding > 0 ? padding : -padding);
-
-// 				break;
-// 			case 'u':
-// 				if (MyProcPort)
-// 				{
-// 					const char *username = MyProcPort->user_name;
-
-// 					if (username == NULL || *username == '\0')
-// 						username = _("[unknown]");
-// 					if (padding != 0)
-// 						appendStringInfo(buf, "%*s", padding, username);
-// 					else
-// 						appendStringInfoString(buf, username);
-// 				}
-// 				else if (padding != 0)
-// 					appendStringInfoSpaces(buf,
-// 										   padding > 0 ? padding : -padding);
-// 				break;
-// 			case 'd':
-// 				if (MyProcPort)
-// 				{
-// 					const char *dbname = MyProcPort->database_name;
-
-// 					if (dbname == NULL || *dbname == '\0')
-// 						dbname = _("[unknown]");
-// 					if (padding != 0)
-// 						appendStringInfo(buf, "%*s", padding, dbname);
-// 					else
-// 						appendStringInfoString(buf, dbname);
-// 				}
-// 				else if (padding != 0)
-// 					appendStringInfoSpaces(buf,
-// 										   padding > 0 ? padding : -padding);
-// 				break;
-// 			case 'c':
-// 				if (padding != 0)
-// 				{
-// 					char		strfbuf[128];
-
-// 					snprintf(strfbuf, sizeof(strfbuf) - 1, "%lx.%x",
-// 							 (long) (MyStartTime), MyProcPid);
-// 					appendStringInfo(buf, "%*s", padding, strfbuf);
-// 				}
-// 				else
-// 					appendStringInfo(buf, "%lx.%x", (long) (MyStartTime), MyProcPid);
-// 				break;
-// 			case 'p':
-// 				if (padding != 0)
-// 					appendStringInfo(buf, "%*d", padding, MyProcPid);
-// 				else
-// 					appendStringInfo(buf, "%d", MyProcPid);
-// 				break;
-// 			case 'l':
-// 				if (padding != 0)
-// 					appendStringInfo(buf, "%*ld", padding, log_line_number);
-// 				else
-// 					appendStringInfo(buf, "%ld", log_line_number);
-// 				break;
-// 			case 'm':
-// 				setup_formatted_log_time();
-// 				if (padding != 0)
-// 					appendStringInfo(buf, "%*s", padding, formatted_log_time);
-// 				else
-// 					appendStringInfoString(buf, formatted_log_time);
-// 				break;
-// 			case 't':
-// 				{
-// 					pg_time_t	stamp_time = (pg_time_t) time(NULL);
-// 					char		strfbuf[128];
-
-// 					pg_strftime(strfbuf, sizeof(strfbuf),
-// 								"%Y-%m-%d %H:%M:%S %Z",
-// 								pg_localtime(&stamp_time, log_timezone));
-// 					if (padding != 0)
-// 						appendStringInfo(buf, "%*s", padding, strfbuf);
-// 					else
-// 						appendStringInfoString(buf, strfbuf);
-// 				}
-// 				break;
-// 			case 'n':
-// 				{
-// 					char		strfbuf[128];
-
-// 					if (!saved_timeval_set)
-// 					{
-// 						gettimeofday(&saved_timeval, NULL);
-// 						saved_timeval_set = true;
-// 					}
-
-// 					snprintf(strfbuf, sizeof(strfbuf), "%ld.%03d",
-// 							 (long) saved_timeval.tv_sec,
-// 							 (int) (saved_timeval.tv_usec / 1000));
-
-// 					if (padding != 0)
-// 						appendStringInfo(buf, "%*s", padding, strfbuf);
-// 					else
-// 						appendStringInfoString(buf, strfbuf);
-// 				}
-// 				break;
-// 			case 's':
-// 				if (formatted_start_time[0] == '\0')
-// 					setup_formatted_start_time();
-// 				if (padding != 0)
-// 					appendStringInfo(buf, "%*s", padding, formatted_start_time);
-// 				else
-// 					appendStringInfoString(buf, formatted_start_time);
-// 				break;
-// 			case 'i':
-// 				if (MyProcPort)
-// 				{
-// 					const char *psdisp;
-// 					int			displen;
-
-// 					psdisp = get_ps_display(&displen);
-// 					if (padding != 0)
-// 						appendStringInfo(buf, "%*s", padding, psdisp);
-// 					else
-// 						appendBinaryStringInfo(buf, psdisp, displen);
-
-// 				}
-// 				else if (padding != 0)
-// 					appendStringInfoSpaces(buf,
-// 										   padding > 0 ? padding : -padding);
-// 				break;
-// 			case 'r':
-// 				if (MyProcPort && MyProcPort->remote_host)
-// 				{
-// 					if (padding != 0)
-// 					{
-// 						if (MyProcPort->remote_port && MyProcPort->remote_port[0] != '\0')
-// 						{
-// 							/*
-// 							 * This option is slightly special as the port
-// 							 * number may be appended onto the end. Here we
-// 							 * need to build 1 string which contains the
-// 							 * remote_host and optionally the remote_port (if
-// 							 * set) so we can properly align the string.
-// 							 */
-
-// 							char	   *hostport;
-
-// 							hostport = psprintf("%s(%s)", MyProcPort->remote_host, MyProcPort->remote_port);
-// 							appendStringInfo(buf, "%*s", padding, hostport);
-// 							pfree(hostport);
-// 						}
-// 						else
-// 							appendStringInfo(buf, "%*s", padding, MyProcPort->remote_host);
-// 					}
-// 					else
-// 					{
-// 						/* padding is 0, so we don't need a temp buffer */
-// 						appendStringInfoString(buf, MyProcPort->remote_host);
-// 						if (MyProcPort->remote_port &&
-// 							MyProcPort->remote_port[0] != '\0')
-// 							appendStringInfo(buf, "(%s)",
-// 											 MyProcPort->remote_port);
-// 					}
-
-// 				}
-// 				else if (padding != 0)
-// 					appendStringInfoSpaces(buf,
-// 										   padding > 0 ? padding : -padding);
-// 				break;
-// 			case 'h':
-// 				if (MyProcPort && MyProcPort->remote_host)
-// 				{
-// 					if (padding != 0)
-// 						appendStringInfo(buf, "%*s", padding, MyProcPort->remote_host);
-// 					else
-// 						appendStringInfoString(buf, MyProcPort->remote_host);
-// 				}
-// 				else if (padding != 0)
-// 					appendStringInfoSpaces(buf,
-// 										   padding > 0 ? padding : -padding);
-// 				break;
-// 			case 'q':
-// 				/* in postmaster and friends, stop if %q is seen */
-// 				/* in a backend, just ignore */
-// 				if (MyProcPort == NULL)
-// 					return;
-// 				break;
-// 			case 'v':
-// 				/* keep VXID format in sync with lockfuncs.c */
-// 				if (MyProc != NULL && MyProc->backendId != InvalidBackendId)
-// 				{
-// 					if (padding != 0)
-// 					{
-// 						char		strfbuf[128];
-
-// 						snprintf(strfbuf, sizeof(strfbuf) - 1, "%d/%u",
-// 								 MyProc->backendId, MyProc->lxid);
-// 						appendStringInfo(buf, "%*s", padding, strfbuf);
-// 					}
-// 					else
-// 						appendStringInfo(buf, "%d/%u", MyProc->backendId, MyProc->lxid);
-// 				}
-// 				else if (padding != 0)
-// 					appendStringInfoSpaces(buf,
-// 										   padding > 0 ? padding : -padding);
-// 				break;
-// 			case 'x':
-// 				if (padding != 0)
-// 					appendStringInfo(buf, "%*u", padding, GetTopTransactionIdIfAny());
-// 				else
-// 					appendStringInfo(buf, "%u", GetTopTransactionIdIfAny());
-// 				break;
-// 			case 'e':
-// 				if (padding != 0)
-// 					appendStringInfo(buf, "%*s", padding, unpack_sql_state(edata->sqlerrcode));
-// 				else
-// 					appendStringInfoString(buf, unpack_sql_state(edata->sqlerrcode));
-// 				break;
-// 			default:
-// 				/* format error - ignore it */
-// 				break;
-// 		}
-// 	}
-// }
-
-// /*
-//  * append a CSV'd version of a string to a StringInfo
-//  * We use the PostgreSQL defaults for CSV, i.e. quote = escape = '"'
-//  * If it's NULL, append nothing.
-//  */
-// static inline void
-// appendCSVLiteral(StringInfo buf, const char *data)
-// {
-// 	const char *p = data;
-// 	char		c;
-
-// 	/* avoid confusing an empty string with NULL */
-// 	if (p == NULL)
-// 		return;
-
-// 	appendStringInfoCharMacro(buf, '"');
-// 	while ((c = *p++) != '\0')
-// 	{
-// 		if (c == '"')
-// 			appendStringInfoCharMacro(buf, '"');
-// 		appendStringInfoCharMacro(buf, c);
-// 	}
-// 	appendStringInfoCharMacro(buf, '"');
-// }
-
-// /*
-//  * Constructs the error message, depending on the Errordata it gets, in a CSV
-//  * format which is described in doc/src/sgml/config.sgml.
-//  */
-// static void
-// write_csvlog(ErrorData *edata)
-// {
-// 	StringInfoData buf;
-// 	bool		print_stmt = false;
-
-// 	/* static counter for line numbers */
-// 	static long log_line_number = 0;
-
-// 	/* has counter been reset in current process? */
-// 	static int	log_my_pid = 0;
-
-// 	/*
-// 	 * This is one of the few places where we'd rather not inherit a static
-// 	 * variable's value from the postmaster.  But since we will, reset it when
-// 	 * MyProcPid changes.
-// 	 */
-// 	if (log_my_pid != MyProcPid)
-// 	{
-// 		log_line_number = 0;
-// 		log_my_pid = MyProcPid;
-// 		formatted_start_time[0] = '\0';
-// 	}
-// 	log_line_number++;
-
-// 	initStringInfo(&buf);
-
-// 	/*
-// 	 * timestamp with milliseconds
-// 	 *
-// 	 * Check if the timestamp is already calculated for the syslog message,
-// 	 * and use it if so.  Otherwise, get the current timestamp.  This is done
-// 	 * to put same timestamp in both syslog and csvlog messages.
-// 	 */
-// 	if (formatted_log_time[0] == '\0')
-// 		setup_formatted_log_time();
-
-// 	appendStringInfoString(&buf, formatted_log_time);
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* username */
-// 	if (MyProcPort)
-// 		appendCSVLiteral(&buf, MyProcPort->user_name);
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* database name */
-// 	if (MyProcPort)
-// 		appendCSVLiteral(&buf, MyProcPort->database_name);
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* Process id  */
-// 	if (MyProcPid != 0)
-// 		appendStringInfo(&buf, "%d", MyProcPid);
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* Remote host and port */
-// 	if (MyProcPort && MyProcPort->remote_host)
-// 	{
-// 		appendStringInfoChar(&buf, '"');
-// 		appendStringInfoString(&buf, MyProcPort->remote_host);
-// 		if (MyProcPort->remote_port && MyProcPort->remote_port[0] != '\0')
-// 		{
-// 			appendStringInfoChar(&buf, ':');
-// 			appendStringInfoString(&buf, MyProcPort->remote_port);
-// 		}
-// 		appendStringInfoChar(&buf, '"');
-// 	}
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* session id */
-// 	appendStringInfo(&buf, "%lx.%x", (long) MyStartTime, MyProcPid);
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* Line number */
-// 	appendStringInfo(&buf, "%ld", log_line_number);
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* PS display */
-// 	if (MyProcPort)
-// 	{
-// 		StringInfoData msgbuf;
-// 		const char *psdisp;
-// 		int			displen;
-
-// 		initStringInfo(&msgbuf);
-
-// 		psdisp = get_ps_display(&displen);
-// 		appendBinaryStringInfo(&msgbuf, psdisp, displen);
-// 		appendCSVLiteral(&buf, msgbuf.data);
-
-// 		pfree(msgbuf.data);
-// 	}
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* session start timestamp */
-// 	if (formatted_start_time[0] == '\0')
-// 		setup_formatted_start_time();
-// 	appendStringInfoString(&buf, formatted_start_time);
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* Virtual transaction id */
-// 	/* keep VXID format in sync with lockfuncs.c */
-// 	if (MyProc != NULL && MyProc->backendId != InvalidBackendId)
-// 		appendStringInfo(&buf, "%d/%u", MyProc->backendId, MyProc->lxid);
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* Transaction id */
-// 	appendStringInfo(&buf, "%u", GetTopTransactionIdIfAny());
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* Error severity */
-// 	appendStringInfoString(&buf, _(error_severity(edata->elevel)));
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* SQL state code */
-// 	appendStringInfoString(&buf, unpack_sql_state(edata->sqlerrcode));
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* errmessage */
-// 	appendCSVLiteral(&buf, edata->message);
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* errdetail or errdetail_log */
-// 	if (edata->detail_log)
-// 		appendCSVLiteral(&buf, edata->detail_log);
-// 	else
-// 		appendCSVLiteral(&buf, edata->detail);
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* errhint */
-// 	appendCSVLiteral(&buf, edata->hint);
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* internal query */
-// 	appendCSVLiteral(&buf, edata->internalquery);
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* if printed internal query, print internal pos too */
-// 	if (edata->internalpos > 0 && edata->internalquery != NULL)
-// 		appendStringInfo(&buf, "%d", edata->internalpos);
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* errcontext */
-// 	if (!edata->hide_ctx)
-// 		appendCSVLiteral(&buf, edata->context);
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* user query --- only reported if not disabled by the caller */
-// 	if (is_log_level_output(edata->elevel, log_min_error_statement) &&
-// 		debug_query_string != NULL &&
-// 		!edata->hide_stmt)
-// 		print_stmt = true;
-// 	if (print_stmt)
-// 		appendCSVLiteral(&buf, debug_query_string);
-// 	appendStringInfoChar(&buf, ',');
-// 	if (print_stmt && edata->cursorpos > 0)
-// 		appendStringInfo(&buf, "%d", edata->cursorpos);
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* file error location */
-// 	if (Log_error_verbosity >= PGERROR_VERBOSE)
-// 	{
-// 		StringInfoData msgbuf;
-
-// 		initStringInfo(&msgbuf);
-
-// 		if (edata->funcname && edata->filename)
-// 			appendStringInfo(&msgbuf, "%s, %s:%d",
-// 							 edata->funcname, edata->filename,
-// 							 edata->lineno);
-// 		else if (edata->filename)
-// 			appendStringInfo(&msgbuf, "%s:%d",
-// 							 edata->filename, edata->lineno);
-// 		appendCSVLiteral(&buf, msgbuf.data);
-// 		pfree(msgbuf.data);
-// 	}
-// 	appendStringInfoChar(&buf, ',');
-
-// 	/* application name */
-// 	if (application_name)
-// 		appendCSVLiteral(&buf, application_name);
-
-// 	appendStringInfoChar(&buf, '\n');
-
-// 	/* If in the syslogger process, try to write messages direct to file */
-// 	if (am_syslogger)
-// 		write_syslogger_file(buf.data, buf.len, LOG_DESTINATION_CSVLOG);
-// 	else
-// 		write_pipe_chunks(buf.data, buf.len, LOG_DESTINATION_CSVLOG);
-
-// 	pfree(buf.data);
-// }
+static void
+write_console(const char *line, int len)
+{
+	int			rc;
+
+#ifdef WIN32
+
+	/*
+	 * Try to convert the message to UTF16 and write it with WriteConsoleW().
+	 * Fall back on write() if anything fails.
+	 *
+	 * In contrast to write_eventlog(), don't skip straight to write() based
+	 * on the applicable encodings.  Unlike WriteConsoleW(), write() depends
+	 * on the suitability of the console output code page.  Since we put
+	 * stderr into binary mode in SubPostmasterMain(), write() skips the
+	 * necessary translation anyway.
+	 *
+	 * WriteConsoleW() will fail if stderr is redirected, so just fall through
+	 * to writing unconverted to the logfile in this case.
+	 *
+	 * Since we palloc the structure required for conversion, also fall
+	 * through to writing unconverted if we have not yet set up
+	 * CurrentMemoryContext.
+	 */
+	if (!in_error_recursion_trouble() &&
+		!redirection_done &&
+		CurrentMemoryContext != NULL)
+	{
+		WCHAR	   *utf16;
+		int			utf16len;
+
+		utf16 = pgwin32_message_to_UTF16(line, len, &utf16len);
+		if (utf16 != NULL)
+		{
+			HANDLE		stdHandle;
+			DWORD		written;
+
+			stdHandle = GetStdHandle(STD_ERROR_HANDLE);
+			if (WriteConsoleW(stdHandle, utf16, utf16len, &written, NULL))
+			{
+				pfree(utf16);
+				return;
+			}
+
+			/*
+			 * In case WriteConsoleW() failed, fall back to writing the
+			 * message unconverted.
+			 */
+			pfree(utf16);
+		}
+	}
+#else
+
+	/*
+	 * Conversion on non-win32 platforms is not implemented yet. It requires
+	 * non-throw version of pg_do_encoding_conversion(), that converts
+	 * unconvertable characters to '?' without errors.
+	 */
+#endif
+
+	/*
+	 * We ignore any error from write() here.  We have no useful way to report
+	 * it ... certainly whining on stderr isn't likely to be productive.
+	 */
+	rc = write(fileno(stderr), line, len);
+	(void) rc;
+}
+
+/*
+ * setup formatted_log_time, for consistent times between CSV and regular logs
+ */
+static void
+setup_formatted_log_time(void)
+{
+	pg_time_t	stamp_time;
+	char		msbuf[13];
+
+	if (!saved_timeval_set)
+	{
+		gettimeofday(&saved_timeval, NULL);
+		saved_timeval_set = true;
+	}
+
+	stamp_time = (pg_time_t) saved_timeval.tv_sec;
+
+	/*
+	 * Note: we expect that guc.c will ensure that log_timezone is set up (at
+	 * least with a minimal GMT value) before Log_line_prefix can become
+	 * nonempty or CSV mode can be selected.
+	 */
+	pg_strftime(formatted_log_time, FORMATTED_TS_LEN,
+	/* leave room for milliseconds... */
+				"%Y-%m-%d %H:%M:%S     %Z",
+				pg_localtime(&stamp_time, log_timezone));
+
+	/* 'paste' milliseconds into place... */
+	sprintf(msbuf, ".%03d", (int) (saved_timeval.tv_usec / 1000));
+	memcpy(formatted_log_time + 19, msbuf, 4);
+}
+
+/*
+ * setup formatted_start_time
+ */
+static void
+setup_formatted_start_time(void)
+{
+	pg_time_t	stamp_time = (pg_time_t) MyStartTime;
+
+	/*
+	 * Note: we expect that guc.c will ensure that log_timezone is set up (at
+	 * least with a minimal GMT value) before Log_line_prefix can become
+	 * nonempty or CSV mode can be selected.
+	 */
+	pg_strftime(formatted_start_time, FORMATTED_TS_LEN,
+				"%Y-%m-%d %H:%M:%S %Z",
+				pg_localtime(&stamp_time, log_timezone));
+}
+
+/*
+ * process_log_prefix_padding --- helper function for processing the format
+ * string in log_line_prefix
+ *
+ * Note: This function returns NULL if it finds something which
+ * it deems invalid in the format string.
+ */
+static const char *
+process_log_prefix_padding(const char *p, int *ppadding)
+{
+	int			paddingsign = 1;
+	int			padding = 0;
+
+	if (*p == '-')
+	{
+		p++;
+
+		if (*p == '\0')			/* Did the buf end in %- ? */
+			return NULL;
+		paddingsign = -1;
+	}
+
+	/* generate an int version of the numerical string */
+	while (*p >= '0' && *p <= '9')
+		padding = padding * 10 + (*p++ - '0');
+
+	/* format is invalid if it ends with the padding number */
+	if (*p == '\0')
+		return NULL;
+
+	padding *= paddingsign;
+	*ppadding = padding;
+	return p;
+}
+
+/*
+ * Format tag info for log lines; append to the provided buffer.
+ */
+static void
+log_line_prefix(StringInfo buf, ErrorData *edata)
+{
+	/* static counter for line numbers */
+	static long log_line_number = 0;
+
+	/* has counter been reset in current process? */
+	static int	log_my_pid = 0;
+	int			padding;
+	const char *p;
+
+	/*
+	 * This is one of the few places where we'd rather not inherit a static
+	 * variable's value from the postmaster.  But since we will, reset it when
+	 * MyProcPid changes. MyStartTime also changes when MyProcPid does, so
+	 * reset the formatted start timestamp too.
+	 */
+	if (log_my_pid != MyProcPid)
+	{
+		log_line_number = 0;
+		log_my_pid = MyProcPid;
+		formatted_start_time[0] = '\0';
+	}
+	log_line_number++;
+
+	if (Log_line_prefix == NULL)
+		return;					/* in case guc hasn't run yet */
+
+	for (p = Log_line_prefix; *p != '\0'; p++)
+	{
+		if (*p != '%')
+		{
+			/* literal char, just copy */
+			appendStringInfoChar(buf, *p);
+			continue;
+		}
+
+		/* must be a '%', so skip to the next char */
+		p++;
+		if (*p == '\0')
+			break;				/* format error - ignore it */
+		else if (*p == '%')
+		{
+			/* string contains %% */
+			appendStringInfoChar(buf, '%');
+			continue;
+		}
+
+
+		/*
+		 * Process any formatting which may exist after the '%'.  Note that
+		 * process_log_prefix_padding moves p past the padding number if it
+		 * exists.
+		 *
+		 * Note: Since only '-', '0' to '9' are valid formatting characters we
+		 * can do a quick check here to pre-check for formatting. If the char
+		 * is not formatting then we can skip a useless function call.
+		 *
+		 * Further note: At least on some platforms, passing %*s rather than
+		 * %s to appendStringInfo() is substantially slower, so many of the
+		 * cases below avoid doing that unless non-zero padding is in fact
+		 * specified.
+		 */
+		if (*p > '9')
+			padding = 0;
+		else if ((p = process_log_prefix_padding(p, &padding)) == NULL)
+			break;
+
+		/* process the option */
+		switch (*p)
+		{
+			case 'a':
+				if (MyProcPort)
+				{
+					const char *appname = application_name;
+
+					if (appname == NULL || *appname == '\0')
+						appname = _("[unknown]");
+					if (padding != 0)
+						appendStringInfo(buf, "%*s", padding, appname);
+					else
+						appendStringInfoString(buf, appname);
+				}
+				else if (padding != 0)
+					appendStringInfoSpaces(buf,
+										   padding > 0 ? padding : -padding);
+
+				break;
+			case 'u':
+				if (MyProcPort)
+				{
+					const char *username = MyProcPort->user_name;
+
+					if (username == NULL || *username == '\0')
+						username = _("[unknown]");
+					if (padding != 0)
+						appendStringInfo(buf, "%*s", padding, username);
+					else
+						appendStringInfoString(buf, username);
+				}
+				else if (padding != 0)
+					appendStringInfoSpaces(buf,
+										   padding > 0 ? padding : -padding);
+				break;
+			case 'd':
+				if (MyProcPort)
+				{
+					const char *dbname = MyProcPort->database_name;
+
+					if (dbname == NULL || *dbname == '\0')
+						dbname = _("[unknown]");
+					if (padding != 0)
+						appendStringInfo(buf, "%*s", padding, dbname);
+					else
+						appendStringInfoString(buf, dbname);
+				}
+				else if (padding != 0)
+					appendStringInfoSpaces(buf,
+										   padding > 0 ? padding : -padding);
+				break;
+			case 'c':
+				if (padding != 0)
+				{
+					char		strfbuf[128];
+
+					snprintf(strfbuf, sizeof(strfbuf) - 1, "%lx.%x",
+							 (long) (MyStartTime), MyProcPid);
+					appendStringInfo(buf, "%*s", padding, strfbuf);
+				}
+				else
+					appendStringInfo(buf, "%lx.%x", (long) (MyStartTime), MyProcPid);
+				break;
+			case 'p':
+				if (padding != 0)
+					appendStringInfo(buf, "%*d", padding, MyProcPid);
+				else
+					appendStringInfo(buf, "%d", MyProcPid);
+				break;
+			case 'l':
+				if (padding != 0)
+					appendStringInfo(buf, "%*ld", padding, log_line_number);
+				else
+					appendStringInfo(buf, "%ld", log_line_number);
+				break;
+			case 'm':
+				setup_formatted_log_time();
+				if (padding != 0)
+					appendStringInfo(buf, "%*s", padding, formatted_log_time);
+				else
+					appendStringInfoString(buf, formatted_log_time);
+				break;
+			case 't':
+				{
+					pg_time_t	stamp_time = (pg_time_t) time(NULL);
+					char		strfbuf[128];
+
+					pg_strftime(strfbuf, sizeof(strfbuf),
+								"%Y-%m-%d %H:%M:%S %Z",
+								pg_localtime(&stamp_time, log_timezone));
+					if (padding != 0)
+						appendStringInfo(buf, "%*s", padding, strfbuf);
+					else
+						appendStringInfoString(buf, strfbuf);
+				}
+				break;
+			case 'n':
+				{
+					char		strfbuf[128];
+
+					if (!saved_timeval_set)
+					{
+						gettimeofday(&saved_timeval, NULL);
+						saved_timeval_set = true;
+					}
+
+					snprintf(strfbuf, sizeof(strfbuf), "%ld.%03d",
+							 (long) saved_timeval.tv_sec,
+							 (int) (saved_timeval.tv_usec / 1000));
+
+					if (padding != 0)
+						appendStringInfo(buf, "%*s", padding, strfbuf);
+					else
+						appendStringInfoString(buf, strfbuf);
+				}
+				break;
+			case 's':
+				if (formatted_start_time[0] == '\0')
+					setup_formatted_start_time();
+				if (padding != 0)
+					appendStringInfo(buf, "%*s", padding, formatted_start_time);
+				else
+					appendStringInfoString(buf, formatted_start_time);
+				break;
+			case 'i':
+				if (MyProcPort)
+				{
+					const char *psdisp;
+					int			displen;
+
+					psdisp = get_ps_display(&displen);
+					if (padding != 0)
+						appendStringInfo(buf, "%*s", padding, psdisp);
+					else
+						appendBinaryStringInfo(buf, psdisp, displen);
+
+				}
+				else if (padding != 0)
+					appendStringInfoSpaces(buf,
+										   padding > 0 ? padding : -padding);
+				break;
+			case 'r':
+				if (MyProcPort && MyProcPort->remote_host)
+				{
+					if (padding != 0)
+					{
+						if (MyProcPort->remote_port && MyProcPort->remote_port[0] != '\0')
+						{
+							/*
+							 * This option is slightly special as the port
+							 * number may be appended onto the end. Here we
+							 * need to build 1 string which contains the
+							 * remote_host and optionally the remote_port (if
+							 * set) so we can properly align the string.
+							 */
+
+							char	   *hostport;
+
+							hostport = psprintf("%s(%s)", MyProcPort->remote_host, MyProcPort->remote_port);
+							appendStringInfo(buf, "%*s", padding, hostport);
+							pfree(hostport);
+						}
+						else
+							appendStringInfo(buf, "%*s", padding, MyProcPort->remote_host);
+					}
+					else
+					{
+						/* padding is 0, so we don't need a temp buffer */
+						appendStringInfoString(buf, MyProcPort->remote_host);
+						if (MyProcPort->remote_port &&
+							MyProcPort->remote_port[0] != '\0')
+							appendStringInfo(buf, "(%s)",
+											 MyProcPort->remote_port);
+					}
+
+				}
+				else if (padding != 0)
+					appendStringInfoSpaces(buf,
+										   padding > 0 ? padding : -padding);
+				break;
+			case 'h':
+				if (MyProcPort && MyProcPort->remote_host)
+				{
+					if (padding != 0)
+						appendStringInfo(buf, "%*s", padding, MyProcPort->remote_host);
+					else
+						appendStringInfoString(buf, MyProcPort->remote_host);
+				}
+				else if (padding != 0)
+					appendStringInfoSpaces(buf,
+										   padding > 0 ? padding : -padding);
+				break;
+			case 'q':
+				/* in postmaster and friends, stop if %q is seen */
+				/* in a backend, just ignore */
+				if (MyProcPort == NULL)
+					return;
+				break;
+			case 'v':
+				/* keep VXID format in sync with lockfuncs.c */
+				if (MyProc != NULL && MyProc->backendId != InvalidBackendId)
+				{
+					if (padding != 0)
+					{
+						char		strfbuf[128];
+
+						snprintf(strfbuf, sizeof(strfbuf) - 1, "%d/%u",
+								 MyProc->backendId, MyProc->lxid);
+						appendStringInfo(buf, "%*s", padding, strfbuf);
+					}
+					else
+						appendStringInfo(buf, "%d/%u", MyProc->backendId, MyProc->lxid);
+				}
+				else if (padding != 0)
+					appendStringInfoSpaces(buf,
+										   padding > 0 ? padding : -padding);
+				break;
+			case 'x':
+				if (padding != 0)
+					appendStringInfo(buf, "%*u", padding, GetTopTransactionIdIfAny());
+				else
+					appendStringInfo(buf, "%u", GetTopTransactionIdIfAny());
+				break;
+			case 'e':
+				if (padding != 0)
+					appendStringInfo(buf, "%*s", padding, unpack_sql_state(edata->sqlerrcode));
+				else
+					appendStringInfoString(buf, unpack_sql_state(edata->sqlerrcode));
+				break;
+			default:
+				/* format error - ignore it */
+				break;
+		}
+	}
+}
+
+/*
+ * append a CSV'd version of a string to a StringInfo
+ * We use the PostgreSQL defaults for CSV, i.e. quote = escape = '"'
+ * If it's NULL, append nothing.
+ */
+static inline void
+appendCSVLiteral(StringInfo buf, const char *data)
+{
+	const char *p = data;
+	char		c;
+
+	/* avoid confusing an empty string with NULL */
+	if (p == NULL)
+		return;
+
+	appendStringInfoCharMacro(buf, '"');
+	while ((c = *p++) != '\0')
+	{
+		if (c == '"')
+			appendStringInfoCharMacro(buf, '"');
+		appendStringInfoCharMacro(buf, c);
+	}
+	appendStringInfoCharMacro(buf, '"');
+}
+
+/*
+ * Constructs the error message, depending on the Errordata it gets, in a CSV
+ * format which is described in doc/src/sgml/config.sgml.
+ */
+static void
+write_csvlog(ErrorData *edata)
+{
+	StringInfoData buf;
+	bool		print_stmt = false;
+
+	/* static counter for line numbers */
+	static long log_line_number = 0;
+
+	/* has counter been reset in current process? */
+	static int	log_my_pid = 0;
+
+	/*
+	 * This is one of the few places where we'd rather not inherit a static
+	 * variable's value from the postmaster.  But since we will, reset it when
+	 * MyProcPid changes.
+	 */
+	if (log_my_pid != MyProcPid)
+	{
+		log_line_number = 0;
+		log_my_pid = MyProcPid;
+		formatted_start_time[0] = '\0';
+	}
+	log_line_number++;
+
+	initStringInfo(&buf);
+
+	/*
+	 * timestamp with milliseconds
+	 *
+	 * Check if the timestamp is already calculated for the syslog message,
+	 * and use it if so.  Otherwise, get the current timestamp.  This is done
+	 * to put same timestamp in both syslog and csvlog messages.
+	 */
+	if (formatted_log_time[0] == '\0')
+		setup_formatted_log_time();
+
+	appendStringInfoString(&buf, formatted_log_time);
+	appendStringInfoChar(&buf, ',');
+
+	/* username */
+	if (MyProcPort)
+		appendCSVLiteral(&buf, MyProcPort->user_name);
+	appendStringInfoChar(&buf, ',');
+
+	/* database name */
+	if (MyProcPort)
+		appendCSVLiteral(&buf, MyProcPort->database_name);
+	appendStringInfoChar(&buf, ',');
+
+	/* Process id  */
+	if (MyProcPid != 0)
+		appendStringInfo(&buf, "%d", MyProcPid);
+	appendStringInfoChar(&buf, ',');
+
+	/* Remote host and port */
+	if (MyProcPort && MyProcPort->remote_host)
+	{
+		appendStringInfoChar(&buf, '"');
+		appendStringInfoString(&buf, MyProcPort->remote_host);
+		if (MyProcPort->remote_port && MyProcPort->remote_port[0] != '\0')
+		{
+			appendStringInfoChar(&buf, ':');
+			appendStringInfoString(&buf, MyProcPort->remote_port);
+		}
+		appendStringInfoChar(&buf, '"');
+	}
+	appendStringInfoChar(&buf, ',');
+
+	/* session id */
+	appendStringInfo(&buf, "%lx.%x", (long) MyStartTime, MyProcPid);
+	appendStringInfoChar(&buf, ',');
+
+	/* Line number */
+	appendStringInfo(&buf, "%ld", log_line_number);
+	appendStringInfoChar(&buf, ',');
+
+	/* PS display */
+	if (MyProcPort)
+	{
+		StringInfoData msgbuf;
+		const char *psdisp;
+		int			displen;
+
+		initStringInfo(&msgbuf);
+
+		psdisp = get_ps_display(&displen);
+		appendBinaryStringInfo(&msgbuf, psdisp, displen);
+		appendCSVLiteral(&buf, msgbuf.data);
+
+		pfree(msgbuf.data);
+	}
+	appendStringInfoChar(&buf, ',');
+
+	/* session start timestamp */
+	if (formatted_start_time[0] == '\0')
+		setup_formatted_start_time();
+	appendStringInfoString(&buf, formatted_start_time);
+	appendStringInfoChar(&buf, ',');
+
+	/* Virtual transaction id */
+	/* keep VXID format in sync with lockfuncs.c */
+	if (MyProc != NULL && MyProc->backendId != InvalidBackendId)
+		appendStringInfo(&buf, "%d/%u", MyProc->backendId, MyProc->lxid);
+	appendStringInfoChar(&buf, ',');
+
+	/* Transaction id */
+	appendStringInfo(&buf, "%u", GetTopTransactionIdIfAny());
+	appendStringInfoChar(&buf, ',');
+
+	/* Error severity */
+	appendStringInfoString(&buf, _(error_severity(edata->elevel)));
+	appendStringInfoChar(&buf, ',');
+
+	/* SQL state code */
+	appendStringInfoString(&buf, unpack_sql_state(edata->sqlerrcode));
+	appendStringInfoChar(&buf, ',');
+
+	/* errmessage */
+	appendCSVLiteral(&buf, edata->message);
+	appendStringInfoChar(&buf, ',');
+
+	/* errdetail or errdetail_log */
+	if (edata->detail_log)
+		appendCSVLiteral(&buf, edata->detail_log);
+	else
+		appendCSVLiteral(&buf, edata->detail);
+	appendStringInfoChar(&buf, ',');
+
+	/* errhint */
+	appendCSVLiteral(&buf, edata->hint);
+	appendStringInfoChar(&buf, ',');
+
+	/* internal query */
+	appendCSVLiteral(&buf, edata->internalquery);
+	appendStringInfoChar(&buf, ',');
+
+	/* if printed internal query, print internal pos too */
+	if (edata->internalpos > 0 && edata->internalquery != NULL)
+		appendStringInfo(&buf, "%d", edata->internalpos);
+	appendStringInfoChar(&buf, ',');
+
+	/* errcontext */
+	if (!edata->hide_ctx)
+		appendCSVLiteral(&buf, edata->context);
+	appendStringInfoChar(&buf, ',');
+
+	/* user query --- only reported if not disabled by the caller */
+	if (is_log_level_output(edata->elevel, log_min_error_statement) &&
+		debug_query_string != NULL &&
+		!edata->hide_stmt)
+		print_stmt = true;
+	if (print_stmt)
+		appendCSVLiteral(&buf, debug_query_string);
+	appendStringInfoChar(&buf, ',');
+	if (print_stmt && edata->cursorpos > 0)
+		appendStringInfo(&buf, "%d", edata->cursorpos);
+	appendStringInfoChar(&buf, ',');
+
+	/* file error location */
+	if (Log_error_verbosity >= PGERROR_VERBOSE)
+	{
+		StringInfoData msgbuf;
+
+		initStringInfo(&msgbuf);
+
+		if (edata->funcname && edata->filename)
+			appendStringInfo(&msgbuf, "%s, %s:%d",
+							 edata->funcname, edata->filename,
+							 edata->lineno);
+		else if (edata->filename)
+			appendStringInfo(&msgbuf, "%s:%d",
+							 edata->filename, edata->lineno);
+		appendCSVLiteral(&buf, msgbuf.data);
+		pfree(msgbuf.data);
+	}
+	appendStringInfoChar(&buf, ',');
+
+	/* application name */
+	if (application_name)
+		appendCSVLiteral(&buf, application_name);
+
+	appendStringInfoChar(&buf, '\n');
+
+	/* If in the syslogger process, try to write messages direct to file */
+	if (am_syslogger)
+		write_syslogger_file(buf.data, buf.len, LOG_DESTINATION_CSVLOG);
+	else
+		write_pipe_chunks(buf.data, buf.len, LOG_DESTINATION_CSVLOG);
+
+	pfree(buf.data);
+}
 
 // /*
 //  * Unpack MAKE_SQLSTATE code. Note that this returns a pointer to a
@@ -2862,467 +2862,467 @@ elog_finish(int elevel, const char *fmt,...)
 // }
 
 
-// /*
-//  * Write error report to server's log
-//  */
-// static void
-// send_message_to_server_log(ErrorData *edata)
-// {
-// 	StringInfoData buf;
+/*
+ * Write error report to server's log
+ */
+static void
+send_message_to_server_log(ErrorData *edata)
+{
+	StringInfoData buf;
 
-// 	initStringInfo(&buf);
+	initStringInfo(&buf);
 
-// 	saved_timeval_set = false;
-// 	formatted_log_time[0] = '\0';
+	saved_timeval_set = false;
+	formatted_log_time[0] = '\0';
 
-// 	log_line_prefix(&buf, edata);
-// 	appendStringInfo(&buf, "%s:  ", _(error_severity(edata->elevel)));
+	log_line_prefix(&buf, edata);
+	appendStringInfo(&buf, "%s:  ", _(error_severity(edata->elevel)));
 
-// 	if (Log_error_verbosity >= PGERROR_VERBOSE)
-// 		appendStringInfo(&buf, "%s: ", unpack_sql_state(edata->sqlerrcode));
+	if (Log_error_verbosity >= PGERROR_VERBOSE)
+		appendStringInfo(&buf, "%s: ", unpack_sql_state(edata->sqlerrcode));
 
-// 	if (edata->message)
-// 		append_with_tabs(&buf, edata->message);
-// 	else
-// 		append_with_tabs(&buf, _("missing error text"));
+	if (edata->message)
+		append_with_tabs(&buf, edata->message);
+	else
+		append_with_tabs(&buf, _("missing error text"));
 
-// 	if (edata->cursorpos > 0)
-// 		appendStringInfo(&buf, _(" at character %d"),
-// 						 edata->cursorpos);
-// 	else if (edata->internalpos > 0)
-// 		appendStringInfo(&buf, _(" at character %d"),
-// 						 edata->internalpos);
+	if (edata->cursorpos > 0)
+		appendStringInfo(&buf, _(" at character %d"),
+						 edata->cursorpos);
+	else if (edata->internalpos > 0)
+		appendStringInfo(&buf, _(" at character %d"),
+						 edata->internalpos);
 
-// 	appendStringInfoChar(&buf, '\n');
+	appendStringInfoChar(&buf, '\n');
 
-// 	if (Log_error_verbosity >= PGERROR_DEFAULT)
-// 	{
-// 		if (edata->detail_log)
-// 		{
-// 			log_line_prefix(&buf, edata);
-// 			appendStringInfoString(&buf, _("DETAIL:  "));
-// 			append_with_tabs(&buf, edata->detail_log);
-// 			appendStringInfoChar(&buf, '\n');
-// 		}
-// 		else if (edata->detail)
-// 		{
-// 			log_line_prefix(&buf, edata);
-// 			appendStringInfoString(&buf, _("DETAIL:  "));
-// 			append_with_tabs(&buf, edata->detail);
-// 			appendStringInfoChar(&buf, '\n');
-// 		}
-// 		if (edata->hint)
-// 		{
-// 			log_line_prefix(&buf, edata);
-// 			appendStringInfoString(&buf, _("HINT:  "));
-// 			append_with_tabs(&buf, edata->hint);
-// 			appendStringInfoChar(&buf, '\n');
-// 		}
-// 		if (edata->internalquery)
-// 		{
-// 			log_line_prefix(&buf, edata);
-// 			appendStringInfoString(&buf, _("QUERY:  "));
-// 			append_with_tabs(&buf, edata->internalquery);
-// 			appendStringInfoChar(&buf, '\n');
-// 		}
-// 		if (edata->context && !edata->hide_ctx)
-// 		{
-// 			log_line_prefix(&buf, edata);
-// 			appendStringInfoString(&buf, _("CONTEXT:  "));
-// 			append_with_tabs(&buf, edata->context);
-// 			appendStringInfoChar(&buf, '\n');
-// 		}
-// 		if (Log_error_verbosity >= PGERROR_VERBOSE)
-// 		{
-// 			/* assume no newlines in funcname or filename... */
-// 			if (edata->funcname && edata->filename)
-// 			{
-// 				log_line_prefix(&buf, edata);
-// 				appendStringInfo(&buf, _("LOCATION:  %s, %s:%d\n"),
-// 								 edata->funcname, edata->filename,
-// 								 edata->lineno);
-// 			}
-// 			else if (edata->filename)
-// 			{
-// 				log_line_prefix(&buf, edata);
-// 				appendStringInfo(&buf, _("LOCATION:  %s:%d\n"),
-// 								 edata->filename, edata->lineno);
-// 			}
-// 		}
-// 	}
+	if (Log_error_verbosity >= PGERROR_DEFAULT)
+	{
+		if (edata->detail_log)
+		{
+			log_line_prefix(&buf, edata);
+			appendStringInfoString(&buf, _("DETAIL:  "));
+			append_with_tabs(&buf, edata->detail_log);
+			appendStringInfoChar(&buf, '\n');
+		}
+		else if (edata->detail)
+		{
+			log_line_prefix(&buf, edata);
+			appendStringInfoString(&buf, _("DETAIL:  "));
+			append_with_tabs(&buf, edata->detail);
+			appendStringInfoChar(&buf, '\n');
+		}
+		if (edata->hint)
+		{
+			log_line_prefix(&buf, edata);
+			appendStringInfoString(&buf, _("HINT:  "));
+			append_with_tabs(&buf, edata->hint);
+			appendStringInfoChar(&buf, '\n');
+		}
+		if (edata->internalquery)
+		{
+			log_line_prefix(&buf, edata);
+			appendStringInfoString(&buf, _("QUERY:  "));
+			append_with_tabs(&buf, edata->internalquery);
+			appendStringInfoChar(&buf, '\n');
+		}
+		if (edata->context && !edata->hide_ctx)
+		{
+			log_line_prefix(&buf, edata);
+			appendStringInfoString(&buf, _("CONTEXT:  "));
+			append_with_tabs(&buf, edata->context);
+			appendStringInfoChar(&buf, '\n');
+		}
+		if (Log_error_verbosity >= PGERROR_VERBOSE)
+		{
+			/* assume no newlines in funcname or filename... */
+			if (edata->funcname && edata->filename)
+			{
+				log_line_prefix(&buf, edata);
+				appendStringInfo(&buf, _("LOCATION:  %s, %s:%d\n"),
+								 edata->funcname, edata->filename,
+								 edata->lineno);
+			}
+			else if (edata->filename)
+			{
+				log_line_prefix(&buf, edata);
+				appendStringInfo(&buf, _("LOCATION:  %s:%d\n"),
+								 edata->filename, edata->lineno);
+			}
+		}
+	}
 
-// 	/*
-// 	 * If the user wants the query that generated this error logged, do it.
-// 	 */
-// 	if (is_log_level_output(edata->elevel, log_min_error_statement) &&
-// 		debug_query_string != NULL &&
-// 		!edata->hide_stmt)
-// 	{
-// 		log_line_prefix(&buf, edata);
-// 		appendStringInfoString(&buf, _("STATEMENT:  "));
-// 		append_with_tabs(&buf, debug_query_string);
-// 		appendStringInfoChar(&buf, '\n');
-// 	}
+	/*
+	 * If the user wants the query that generated this error logged, do it.
+	 */
+	if (is_log_level_output(edata->elevel, log_min_error_statement) &&
+		debug_query_string != NULL &&
+		!edata->hide_stmt)
+	{
+		log_line_prefix(&buf, edata);
+		appendStringInfoString(&buf, _("STATEMENT:  "));
+		append_with_tabs(&buf, debug_query_string);
+		appendStringInfoChar(&buf, '\n');
+	}
 
-// #ifdef HAVE_SYSLOG
-// 	/* Write to syslog, if enabled */
-// 	if (Log_destination & LOG_DESTINATION_SYSLOG)
-// 	{
-// 		int			syslog_level;
+#ifdef HAVE_SYSLOG
+	/* Write to syslog, if enabled */
+	if (Log_destination & LOG_DESTINATION_SYSLOG)
+	{
+		int			syslog_level;
 
-// 		switch (edata->elevel)
-// 		{
-// 			case DEBUG5:
-// 			case DEBUG4:
-// 			case DEBUG3:
-// 			case DEBUG2:
-// 			case DEBUG1:
-// 				syslog_level = LOG_DEBUG;
-// 				break;
-// 			case LOG:
-// 			case LOG_SERVER_ONLY:
-// 			case INFO:
-// 				syslog_level = LOG_INFO;
-// 				break;
-// 			case NOTICE:
-// 			case WARNING:
-// 				syslog_level = LOG_NOTICE;
-// 				break;
-// 			case ERROR:
-// 				syslog_level = LOG_WARNING;
-// 				break;
-// 			case FATAL:
-// 				syslog_level = LOG_ERR;
-// 				break;
-// 			case PANIC:
-// 			default:
-// 				syslog_level = LOG_CRIT;
-// 				break;
-// 		}
+		switch (edata->elevel)
+		{
+			case DEBUG5:
+			case DEBUG4:
+			case DEBUG3:
+			case DEBUG2:
+			case DEBUG1:
+				syslog_level = LOG_DEBUG;
+				break;
+			case LOG:
+			case LOG_SERVER_ONLY:
+			case INFO:
+				syslog_level = LOG_INFO;
+				break;
+			case NOTICE:
+			case WARNING:
+				syslog_level = LOG_NOTICE;
+				break;
+			case ERROR:
+				syslog_level = LOG_WARNING;
+				break;
+			case FATAL:
+				syslog_level = LOG_ERR;
+				break;
+			case PANIC:
+			default:
+				syslog_level = LOG_CRIT;
+				break;
+		}
 
-// 		write_syslog(syslog_level, buf.data);
-// 	}
-// #endif							/* HAVE_SYSLOG */
+		write_syslog(syslog_level, buf.data);
+	}
+#endif							/* HAVE_SYSLOG */
 
-// #ifdef WIN32
-// 	/* Write to eventlog, if enabled */
-// 	if (Log_destination & LOG_DESTINATION_EVENTLOG)
-// 	{
-// 		write_eventlog(edata->elevel, buf.data, buf.len);
-// 	}
-// #endif							/* WIN32 */
+#ifdef WIN32
+	/* Write to eventlog, if enabled */
+	if (Log_destination & LOG_DESTINATION_EVENTLOG)
+	{
+		write_eventlog(edata->elevel, buf.data, buf.len);
+	}
+#endif							/* WIN32 */
 
-// 	/* Write to stderr, if enabled */
-// 	if ((Log_destination & LOG_DESTINATION_STDERR) || whereToSendOutput == DestDebug)
-// 	{
-// 		/*
-// 		 * Use the chunking protocol if we know the syslogger should be
-// 		 * catching stderr output, and we are not ourselves the syslogger.
-// 		 * Otherwise, just do a vanilla write to stderr.
-// 		 */
-// 		if (redirection_done && !am_syslogger)
-// 			write_pipe_chunks(buf.data, buf.len, LOG_DESTINATION_STDERR);
-// #ifdef WIN32
+	/* Write to stderr, if enabled */
+	if ((Log_destination & LOG_DESTINATION_STDERR) || whereToSendOutput == DestDebug)
+	{
+		/*
+		 * Use the chunking protocol if we know the syslogger should be
+		 * catching stderr output, and we are not ourselves the syslogger.
+		 * Otherwise, just do a vanilla write to stderr.
+		 */
+		if (redirection_done && !am_syslogger)
+			write_pipe_chunks(buf.data, buf.len, LOG_DESTINATION_STDERR);
+#ifdef WIN32
 
-// 		/*
-// 		 * In a win32 service environment, there is no usable stderr. Capture
-// 		 * anything going there and write it to the eventlog instead.
-// 		 *
-// 		 * If stderr redirection is active, it was OK to write to stderr above
-// 		 * because that's really a pipe to the syslogger process.
-// 		 */
-// 		else if (pgwin32_is_service())
-// 			write_eventlog(edata->elevel, buf.data, buf.len);
-// #endif
-// 		else
-// 			write_console(buf.data, buf.len);
-// 	}
+		/*
+		 * In a win32 service environment, there is no usable stderr. Capture
+		 * anything going there and write it to the eventlog instead.
+		 *
+		 * If stderr redirection is active, it was OK to write to stderr above
+		 * because that's really a pipe to the syslogger process.
+		 */
+		else if (pgwin32_is_service())
+			write_eventlog(edata->elevel, buf.data, buf.len);
+#endif
+		else
+			write_console(buf.data, buf.len);
+	}
 
-// 	/* If in the syslogger process, try to write messages direct to file */
-// 	if (am_syslogger)
-// 		write_syslogger_file(buf.data, buf.len, LOG_DESTINATION_STDERR);
+	/* If in the syslogger process, try to write messages direct to file */
+	if (am_syslogger)
+		write_syslogger_file(buf.data, buf.len, LOG_DESTINATION_STDERR);
 
-// 	/* Write to CSV log if enabled */
-// 	if (Log_destination & LOG_DESTINATION_CSVLOG)
-// 	{
-// 		if (redirection_done || am_syslogger)
-// 		{
-// 			/*
-// 			 * send CSV data if it's safe to do so (syslogger doesn't need the
-// 			 * pipe). First get back the space in the message buffer.
-// 			 */
-// 			pfree(buf.data);
-// 			write_csvlog(edata);
-// 		}
-// 		else
-// 		{
-// 			/*
-// 			 * syslogger not up (yet), so just dump the message to stderr,
-// 			 * unless we already did so above.
-// 			 */
-// 			if (!(Log_destination & LOG_DESTINATION_STDERR) &&
-// 				whereToSendOutput != DestDebug)
-// 				write_console(buf.data, buf.len);
-// 			pfree(buf.data);
-// 		}
-// 	}
-// 	else
-// 	{
-// 		pfree(buf.data);
-// 	}
-// }
+	/* Write to CSV log if enabled */
+	if (Log_destination & LOG_DESTINATION_CSVLOG)
+	{
+		if (redirection_done || am_syslogger)
+		{
+			/*
+			 * send CSV data if it's safe to do so (syslogger doesn't need the
+			 * pipe). First get back the space in the message buffer.
+			 */
+			pfree(buf.data);
+			write_csvlog(edata);
+		}
+		else
+		{
+			/*
+			 * syslogger not up (yet), so just dump the message to stderr,
+			 * unless we already did so above.
+			 */
+			if (!(Log_destination & LOG_DESTINATION_STDERR) &&
+				whereToSendOutput != DestDebug)
+				write_console(buf.data, buf.len);
+			pfree(buf.data);
+		}
+	}
+	else
+	{
+		pfree(buf.data);
+	}
+}
 
-// /*
-//  * Send data to the syslogger using the chunked protocol
-//  *
-//  * Note: when there are multiple backends writing into the syslogger pipe,
-//  * it's critical that each write go into the pipe indivisibly, and not
-//  * get interleaved with data from other processes.  Fortunately, the POSIX
-//  * spec requires that writes to pipes be atomic so long as they are not
-//  * more than PIPE_BUF bytes long.  So we divide long messages into chunks
-//  * that are no more than that length, and send one chunk per write() call.
-//  * The collector process knows how to reassemble the chunks.
-//  *
-//  * Because of the atomic write requirement, there are only two possible
-//  * results from write() here: -1 for failure, or the requested number of
-//  * bytes.  There is not really anything we can do about a failure; retry would
-//  * probably be an infinite loop, and we can't even report the error usefully.
-//  * (There is noplace else we could send it!)  So we might as well just ignore
-//  * the result from write().  However, on some platforms you get a compiler
-//  * warning from ignoring write()'s result, so do a little dance with casting
-//  * rc to void to shut up the compiler.
-//  */
-// static void
-// write_pipe_chunks(char *data, int len, int dest)
-// {
-// 	PipeProtoChunk p;
-// 	int			fd = fileno(stderr);
-// 	int			rc;
+/*
+ * Send data to the syslogger using the chunked protocol
+ *
+ * Note: when there are multiple backends writing into the syslogger pipe,
+ * it's critical that each write go into the pipe indivisibly, and not
+ * get interleaved with data from other processes.  Fortunately, the POSIX
+ * spec requires that writes to pipes be atomic so long as they are not
+ * more than PIPE_BUF bytes long.  So we divide long messages into chunks
+ * that are no more than that length, and send one chunk per write() call.
+ * The collector process knows how to reassemble the chunks.
+ *
+ * Because of the atomic write requirement, there are only two possible
+ * results from write() here: -1 for failure, or the requested number of
+ * bytes.  There is not really anything we can do about a failure; retry would
+ * probably be an infinite loop, and we can't even report the error usefully.
+ * (There is noplace else we could send it!)  So we might as well just ignore
+ * the result from write().  However, on some platforms you get a compiler
+ * warning from ignoring write()'s result, so do a little dance with casting
+ * rc to void to shut up the compiler.
+ */
+static void
+write_pipe_chunks(char *data, int len, int dest)
+{
+	PipeProtoChunk p;
+	int			fd = fileno(stderr);
+	int			rc;
 
-// 	Assert(len > 0);
+	Assert(len > 0);
 
-// 	p.proto.nuls[0] = p.proto.nuls[1] = '\0';
-// 	p.proto.pid = MyProcPid;
+	p.proto.nuls[0] = p.proto.nuls[1] = '\0';
+	p.proto.pid = MyProcPid;
 
-// 	/* write all but the last chunk */
-// 	while (len > PIPE_MAX_PAYLOAD)
-// 	{
-// 		p.proto.is_last = (dest == LOG_DESTINATION_CSVLOG ? 'F' : 'f');
-// 		p.proto.len = PIPE_MAX_PAYLOAD;
-// 		memcpy(p.proto.data, data, PIPE_MAX_PAYLOAD);
-// 		rc = write(fd, &p, PIPE_HEADER_SIZE + PIPE_MAX_PAYLOAD);
-// 		(void) rc;
-// 		data += PIPE_MAX_PAYLOAD;
-// 		len -= PIPE_MAX_PAYLOAD;
-// 	}
+	/* write all but the last chunk */
+	while (len > PIPE_MAX_PAYLOAD)
+	{
+		p.proto.is_last = (dest == LOG_DESTINATION_CSVLOG ? 'F' : 'f');
+		p.proto.len = PIPE_MAX_PAYLOAD;
+		memcpy(p.proto.data, data, PIPE_MAX_PAYLOAD);
+		rc = write(fd, &p, PIPE_HEADER_SIZE + PIPE_MAX_PAYLOAD);
+		(void) rc;
+		data += PIPE_MAX_PAYLOAD;
+		len -= PIPE_MAX_PAYLOAD;
+	}
 
-// 	/* write the last chunk */
-// 	p.proto.is_last = (dest == LOG_DESTINATION_CSVLOG ? 'T' : 't');
-// 	p.proto.len = len;
-// 	memcpy(p.proto.data, data, len);
-// 	rc = write(fd, &p, PIPE_HEADER_SIZE + len);
-// 	(void) rc;
-// }
+	/* write the last chunk */
+	p.proto.is_last = (dest == LOG_DESTINATION_CSVLOG ? 'T' : 't');
+	p.proto.len = len;
+	memcpy(p.proto.data, data, len);
+	rc = write(fd, &p, PIPE_HEADER_SIZE + len);
+	(void) rc;
+}
 
 
-// /*
-//  * Append a text string to the error report being built for the client.
-//  *
-//  * This is ordinarily identical to pq_sendstring(), but if we are in
-//  * error recursion trouble we skip encoding conversion, because of the
-//  * possibility that the problem is a failure in the encoding conversion
-//  * subsystem itself.  Code elsewhere should ensure that the passed-in
-//  * strings will be plain 7-bit ASCII, and thus not in need of conversion,
-//  * in such cases.  (In particular, we disable localization of error messages
-//  * to help ensure that's true.)
-//  */
-// static void
-// err_sendstring(StringInfo buf, const char *str)
-// {
-// 	if (in_error_recursion_trouble())
-// 		pq_send_ascii_string(buf, str);
-// 	else
-// 		pq_sendstring(buf, str);
-// }
+/*
+ * Append a text string to the error report being built for the client.
+ *
+ * This is ordinarily identical to pq_sendstring(), but if we are in
+ * error recursion trouble we skip encoding conversion, because of the
+ * possibility that the problem is a failure in the encoding conversion
+ * subsystem itself.  Code elsewhere should ensure that the passed-in
+ * strings will be plain 7-bit ASCII, and thus not in need of conversion,
+ * in such cases.  (In particular, we disable localization of error messages
+ * to help ensure that's true.)
+ */
+static void
+err_sendstring(StringInfo buf, const char *str)
+{
+	if (in_error_recursion_trouble())
+		pq_send_ascii_string(buf, str);
+	else
+		pq_sendstring(buf, str);
+}
 
-// /*
-//  * Write error report to client
-//  */
-// static void
-// send_message_to_frontend(ErrorData *edata)
-// {
-// 	StringInfoData msgbuf;
+/*
+ * Write error report to client
+ */
+static void
+send_message_to_frontend(ErrorData *edata)
+{
+	StringInfoData msgbuf;
 
-// 	/* 'N' (Notice) is for nonfatal conditions, 'E' is for errors */
-// 	pq_beginmessage(&msgbuf, (edata->elevel < ERROR) ? 'N' : 'E');
+	/* 'N' (Notice) is for nonfatal conditions, 'E' is for errors */
+	pq_beginmessage(&msgbuf, (edata->elevel < ERROR) ? 'N' : 'E');
 
-// 	if (PG_PROTOCOL_MAJOR(FrontendProtocol) >= 3)
-// 	{
-// 		/* New style with separate fields */
-// 		const char *sev;
-// 		char		tbuf[12];
-// 		int			ssval;
-// 		int			i;
+	if (PG_PROTOCOL_MAJOR(FrontendProtocol) >= 3)
+	{
+		/* New style with separate fields */
+		const char *sev;
+		char		tbuf[12];
+		int			ssval;
+		int			i;
 
-// 		sev = error_severity(edata->elevel);
-// 		pq_sendbyte(&msgbuf, PG_DIAG_SEVERITY);
-// 		err_sendstring(&msgbuf, _(sev));
-// 		pq_sendbyte(&msgbuf, PG_DIAG_SEVERITY_NONLOCALIZED);
-// 		err_sendstring(&msgbuf, sev);
+		sev = error_severity(edata->elevel);
+		pq_sendbyte(&msgbuf, PG_DIAG_SEVERITY);
+		err_sendstring(&msgbuf, _(sev));
+		pq_sendbyte(&msgbuf, PG_DIAG_SEVERITY_NONLOCALIZED);
+		err_sendstring(&msgbuf, sev);
 
-// 		/* unpack MAKE_SQLSTATE code */
-// 		ssval = edata->sqlerrcode;
-// 		for (i = 0; i < 5; i++)
-// 		{
-// 			tbuf[i] = PGUNSIXBIT(ssval);
-// 			ssval >>= 6;
-// 		}
-// 		tbuf[i] = '\0';
+		/* unpack MAKE_SQLSTATE code */
+		ssval = edata->sqlerrcode;
+		for (i = 0; i < 5; i++)
+		{
+			tbuf[i] = PGUNSIXBIT(ssval);
+			ssval >>= 6;
+		}
+		tbuf[i] = '\0';
 
-// 		pq_sendbyte(&msgbuf, PG_DIAG_SQLSTATE);
-// 		err_sendstring(&msgbuf, tbuf);
+		pq_sendbyte(&msgbuf, PG_DIAG_SQLSTATE);
+		err_sendstring(&msgbuf, tbuf);
 
-// 		/* M field is required per protocol, so always send something */
-// 		pq_sendbyte(&msgbuf, PG_DIAG_MESSAGE_PRIMARY);
-// 		if (edata->message)
-// 			err_sendstring(&msgbuf, edata->message);
-// 		else
-// 			err_sendstring(&msgbuf, _("missing error text"));
+		/* M field is required per protocol, so always send something */
+		pq_sendbyte(&msgbuf, PG_DIAG_MESSAGE_PRIMARY);
+		if (edata->message)
+			err_sendstring(&msgbuf, edata->message);
+		else
+			err_sendstring(&msgbuf, _("missing error text"));
 
-// 		if (edata->detail)
-// 		{
-// 			pq_sendbyte(&msgbuf, PG_DIAG_MESSAGE_DETAIL);
-// 			err_sendstring(&msgbuf, edata->detail);
-// 		}
+		if (edata->detail)
+		{
+			pq_sendbyte(&msgbuf, PG_DIAG_MESSAGE_DETAIL);
+			err_sendstring(&msgbuf, edata->detail);
+		}
 
-// 		/* detail_log is intentionally not used here */
+		/* detail_log is intentionally not used here */
 
-// 		if (edata->hint)
-// 		{
-// 			pq_sendbyte(&msgbuf, PG_DIAG_MESSAGE_HINT);
-// 			err_sendstring(&msgbuf, edata->hint);
-// 		}
+		if (edata->hint)
+		{
+			pq_sendbyte(&msgbuf, PG_DIAG_MESSAGE_HINT);
+			err_sendstring(&msgbuf, edata->hint);
+		}
 
-// 		if (edata->context)
-// 		{
-// 			pq_sendbyte(&msgbuf, PG_DIAG_CONTEXT);
-// 			err_sendstring(&msgbuf, edata->context);
-// 		}
+		if (edata->context)
+		{
+			pq_sendbyte(&msgbuf, PG_DIAG_CONTEXT);
+			err_sendstring(&msgbuf, edata->context);
+		}
 
-// 		if (edata->schema_name)
-// 		{
-// 			pq_sendbyte(&msgbuf, PG_DIAG_SCHEMA_NAME);
-// 			err_sendstring(&msgbuf, edata->schema_name);
-// 		}
+		if (edata->schema_name)
+		{
+			pq_sendbyte(&msgbuf, PG_DIAG_SCHEMA_NAME);
+			err_sendstring(&msgbuf, edata->schema_name);
+		}
 
-// 		if (edata->table_name)
-// 		{
-// 			pq_sendbyte(&msgbuf, PG_DIAG_TABLE_NAME);
-// 			err_sendstring(&msgbuf, edata->table_name);
-// 		}
+		if (edata->table_name)
+		{
+			pq_sendbyte(&msgbuf, PG_DIAG_TABLE_NAME);
+			err_sendstring(&msgbuf, edata->table_name);
+		}
 
-// 		if (edata->column_name)
-// 		{
-// 			pq_sendbyte(&msgbuf, PG_DIAG_COLUMN_NAME);
-// 			err_sendstring(&msgbuf, edata->column_name);
-// 		}
+		if (edata->column_name)
+		{
+			pq_sendbyte(&msgbuf, PG_DIAG_COLUMN_NAME);
+			err_sendstring(&msgbuf, edata->column_name);
+		}
 
-// 		if (edata->datatype_name)
-// 		{
-// 			pq_sendbyte(&msgbuf, PG_DIAG_DATATYPE_NAME);
-// 			err_sendstring(&msgbuf, edata->datatype_name);
-// 		}
+		if (edata->datatype_name)
+		{
+			pq_sendbyte(&msgbuf, PG_DIAG_DATATYPE_NAME);
+			err_sendstring(&msgbuf, edata->datatype_name);
+		}
 
-// 		if (edata->constraint_name)
-// 		{
-// 			pq_sendbyte(&msgbuf, PG_DIAG_CONSTRAINT_NAME);
-// 			err_sendstring(&msgbuf, edata->constraint_name);
-// 		}
+		if (edata->constraint_name)
+		{
+			pq_sendbyte(&msgbuf, PG_DIAG_CONSTRAINT_NAME);
+			err_sendstring(&msgbuf, edata->constraint_name);
+		}
 
-// 		if (edata->cursorpos > 0)
-// 		{
-// 			snprintf(tbuf, sizeof(tbuf), "%d", edata->cursorpos);
-// 			pq_sendbyte(&msgbuf, PG_DIAG_STATEMENT_POSITION);
-// 			err_sendstring(&msgbuf, tbuf);
-// 		}
+		if (edata->cursorpos > 0)
+		{
+			snprintf(tbuf, sizeof(tbuf), "%d", edata->cursorpos);
+			pq_sendbyte(&msgbuf, PG_DIAG_STATEMENT_POSITION);
+			err_sendstring(&msgbuf, tbuf);
+		}
 
-// 		if (edata->internalpos > 0)
-// 		{
-// 			snprintf(tbuf, sizeof(tbuf), "%d", edata->internalpos);
-// 			pq_sendbyte(&msgbuf, PG_DIAG_INTERNAL_POSITION);
-// 			err_sendstring(&msgbuf, tbuf);
-// 		}
+		if (edata->internalpos > 0)
+		{
+			snprintf(tbuf, sizeof(tbuf), "%d", edata->internalpos);
+			pq_sendbyte(&msgbuf, PG_DIAG_INTERNAL_POSITION);
+			err_sendstring(&msgbuf, tbuf);
+		}
 
-// 		if (edata->internalquery)
-// 		{
-// 			pq_sendbyte(&msgbuf, PG_DIAG_INTERNAL_QUERY);
-// 			err_sendstring(&msgbuf, edata->internalquery);
-// 		}
+		if (edata->internalquery)
+		{
+			pq_sendbyte(&msgbuf, PG_DIAG_INTERNAL_QUERY);
+			err_sendstring(&msgbuf, edata->internalquery);
+		}
 
-// 		if (edata->filename)
-// 		{
-// 			pq_sendbyte(&msgbuf, PG_DIAG_SOURCE_FILE);
-// 			err_sendstring(&msgbuf, edata->filename);
-// 		}
+		if (edata->filename)
+		{
+			pq_sendbyte(&msgbuf, PG_DIAG_SOURCE_FILE);
+			err_sendstring(&msgbuf, edata->filename);
+		}
 
-// 		if (edata->lineno > 0)
-// 		{
-// 			snprintf(tbuf, sizeof(tbuf), "%d", edata->lineno);
-// 			pq_sendbyte(&msgbuf, PG_DIAG_SOURCE_LINE);
-// 			err_sendstring(&msgbuf, tbuf);
-// 		}
+		if (edata->lineno > 0)
+		{
+			snprintf(tbuf, sizeof(tbuf), "%d", edata->lineno);
+			pq_sendbyte(&msgbuf, PG_DIAG_SOURCE_LINE);
+			err_sendstring(&msgbuf, tbuf);
+		}
 
-// 		if (edata->funcname)
-// 		{
-// 			pq_sendbyte(&msgbuf, PG_DIAG_SOURCE_FUNCTION);
-// 			err_sendstring(&msgbuf, edata->funcname);
-// 		}
+		if (edata->funcname)
+		{
+			pq_sendbyte(&msgbuf, PG_DIAG_SOURCE_FUNCTION);
+			err_sendstring(&msgbuf, edata->funcname);
+		}
 
-// 		pq_sendbyte(&msgbuf, '\0'); /* terminator */
-// 	}
-// 	else
-// 	{
-// 		/* Old style --- gin up a backwards-compatible message */
-// 		StringInfoData buf;
+		pq_sendbyte(&msgbuf, '\0'); /* terminator */
+	}
+	else
+	{
+		/* Old style --- gin up a backwards-compatible message */
+		StringInfoData buf;
 
-// 		initStringInfo(&buf);
+		initStringInfo(&buf);
 
-// 		appendStringInfo(&buf, "%s:  ", _(error_severity(edata->elevel)));
+		appendStringInfo(&buf, "%s:  ", _(error_severity(edata->elevel)));
 
-// 		if (edata->show_funcname && edata->funcname)
-// 			appendStringInfo(&buf, "%s: ", edata->funcname);
+		if (edata->show_funcname && edata->funcname)
+			appendStringInfo(&buf, "%s: ", edata->funcname);
 
-// 		if (edata->message)
-// 			appendStringInfoString(&buf, edata->message);
-// 		else
-// 			appendStringInfoString(&buf, _("missing error text"));
+		if (edata->message)
+			appendStringInfoString(&buf, edata->message);
+		else
+			appendStringInfoString(&buf, _("missing error text"));
 
-// 		if (edata->cursorpos > 0)
-// 			appendStringInfo(&buf, _(" at character %d"),
-// 							 edata->cursorpos);
-// 		else if (edata->internalpos > 0)
-// 			appendStringInfo(&buf, _(" at character %d"),
-// 							 edata->internalpos);
+		if (edata->cursorpos > 0)
+			appendStringInfo(&buf, _(" at character %d"),
+							 edata->cursorpos);
+		else if (edata->internalpos > 0)
+			appendStringInfo(&buf, _(" at character %d"),
+							 edata->internalpos);
 
-// 		appendStringInfoChar(&buf, '\n');
+		appendStringInfoChar(&buf, '\n');
 
-// 		err_sendstring(&msgbuf, buf.data);
+		err_sendstring(&msgbuf, buf.data);
 
-// 		pfree(buf.data);
-// 	}
+		pfree(buf.data);
+	}
 
-// 	pq_endmessage(&msgbuf);
+	pq_endmessage(&msgbuf);
 
-// 	/*
-// 	 * This flush is normally not necessary, since postgres.c will flush out
-// 	 * waiting data when control returns to the main loop. But it seems best
-// 	 * to leave it here, so that the client has some clue what happened if the
-// 	 * backend dies before getting back to the main loop ... error/notice
-// 	 * messages should not be a performance-critical path anyway, so an extra
-// 	 * flush won't hurt much ...
-// 	 */
-// 	pq_flush();
-// }
+	/*
+	 * This flush is normally not necessary, since postgres.c will flush out
+	 * waiting data when control returns to the main loop. But it seems best
+	 * to leave it here, so that the client has some clue what happened if the
+	 * backend dies before getting back to the main loop ... error/notice
+	 * messages should not be a performance-critical path anyway, so an extra
+	 * flush won't hurt much ...
+	 */
+	pq_flush();
+}
 
 
 // /*
@@ -3596,118 +3596,118 @@ get_errno_symbol(int errnum)
 }
 
 
-// /*
-//  * error_severity --- get string representing elevel
-//  *
-//  * The string is not localized here, but we mark the strings for translation
-//  * so that callers can invoke _() on the result.
-//  */
-// static const char *
-// error_severity(int elevel)
-// {
-// 	const char *prefix;
+/*
+ * error_severity --- get string representing elevel
+ *
+ * The string is not localized here, but we mark the strings for translation
+ * so that callers can invoke _() on the result.
+ */
+static const char *
+error_severity(int elevel)
+{
+	const char *prefix;
 
-// 	switch (elevel)
-// 	{
-// 		case DEBUG1:
-// 		case DEBUG2:
-// 		case DEBUG3:
-// 		case DEBUG4:
-// 		case DEBUG5:
-// 			prefix = gettext_noop("DEBUG");
-// 			break;
-// 		case LOG:
-// 		case LOG_SERVER_ONLY:
-// 			prefix = gettext_noop("LOG");
-// 			break;
-// 		case INFO:
-// 			prefix = gettext_noop("INFO");
-// 			break;
-// 		case NOTICE:
-// 			prefix = gettext_noop("NOTICE");
-// 			break;
-// 		case WARNING:
-// 			prefix = gettext_noop("WARNING");
-// 			break;
-// 		case ERROR:
-// 			prefix = gettext_noop("ERROR");
-// 			break;
-// 		case FATAL:
-// 			prefix = gettext_noop("FATAL");
-// 			break;
-// 		case PANIC:
-// 			prefix = gettext_noop("PANIC");
-// 			break;
-// 		default:
-// 			prefix = "???";
-// 			break;
-// 	}
+	switch (elevel)
+	{
+		case DEBUG1:
+		case DEBUG2:
+		case DEBUG3:
+		case DEBUG4:
+		case DEBUG5:
+			prefix = gettext_noop("DEBUG");
+			break;
+		case LOG:
+		case LOG_SERVER_ONLY:
+			prefix = gettext_noop("LOG");
+			break;
+		case INFO:
+			prefix = gettext_noop("INFO");
+			break;
+		case NOTICE:
+			prefix = gettext_noop("NOTICE");
+			break;
+		case WARNING:
+			prefix = gettext_noop("WARNING");
+			break;
+		case ERROR:
+			prefix = gettext_noop("ERROR");
+			break;
+		case FATAL:
+			prefix = gettext_noop("FATAL");
+			break;
+		case PANIC:
+			prefix = gettext_noop("PANIC");
+			break;
+		default:
+			prefix = "???";
+			break;
+	}
 
-// 	return prefix;
-// }
-
-
-// /*
-//  *	append_with_tabs
-//  *
-//  *	Append the string to the StringInfo buffer, inserting a tab after any
-//  *	newline.
-//  */
-// static void
-// append_with_tabs(StringInfo buf, const char *str)
-// {
-// 	char		ch;
-
-// 	while ((ch = *str++) != '\0')
-// 	{
-// 		appendStringInfoCharMacro(buf, ch);
-// 		if (ch == '\n')
-// 			appendStringInfoCharMacro(buf, '\t');
-// 	}
-// }
+	return prefix;
+}
 
 
-// /*
-//  * Write errors to stderr (or by equal means when stderr is
-//  * not available). Used before ereport/elog can be used
-//  * safely (memory context, GUC load etc)
-//  */
-// void
-// write_stderr(const char *fmt,...)
-// {
-// 	va_list		ap;
+/*
+ *	append_with_tabs
+ *
+ *	Append the string to the StringInfo buffer, inserting a tab after any
+ *	newline.
+ */
+static void
+append_with_tabs(StringInfo buf, const char *str)
+{
+	char		ch;
 
-// #ifdef WIN32
-// 	char		errbuf[2048];	/* Arbitrary size? */
-// #endif
+	while ((ch = *str++) != '\0')
+	{
+		appendStringInfoCharMacro(buf, ch);
+		if (ch == '\n')
+			appendStringInfoCharMacro(buf, '\t');
+	}
+}
 
-// 	fmt = _(fmt);
 
-// 	va_start(ap, fmt);
-// #ifndef WIN32
-// 	/* On Unix, we just fprintf to stderr */
-// 	vfprintf(stderr, fmt, ap);
-// 	fflush(stderr);
-// #else
-// 	vsnprintf(errbuf, sizeof(errbuf), fmt, ap);
+/*
+ * Write errors to stderr (or by equal means when stderr is
+ * not available). Used before ereport/elog can be used
+ * safely (memory context, GUC load etc)
+ */
+void
+write_stderr(const char *fmt,...)
+{
+	va_list		ap;
 
-// 	/*
-// 	 * On Win32, we print to stderr if running on a console, or write to
-// 	 * eventlog if running as a service
-// 	 */
-// 	if (pgwin32_is_service())	/* Running as a service */
-// 	{
-// 		write_eventlog(ERROR, errbuf, strlen(errbuf));
-// 	}
-// 	else
-// 	{
-// 		/* Not running as service, write to stderr */
-// 		write_console(errbuf, strlen(errbuf));
-// 		fflush(stderr);
-// 	}
-// #endif
-// 	va_end(ap);
-// }
+#ifdef WIN32
+	char		errbuf[2048];	/* Arbitrary size? */
+#endif
+
+	fmt = _(fmt);
+
+	va_start(ap, fmt);
+#ifndef WIN32
+	/* On Unix, we just fprintf to stderr */
+	vfprintf(stderr, fmt, ap);
+	fflush(stderr);
+#else
+	vsnprintf(errbuf, sizeof(errbuf), fmt, ap);
+
+	/*
+	 * On Win32, we print to stderr if running on a console, or write to
+	 * eventlog if running as a service
+	 */
+	if (pgwin32_is_service())	/* Running as a service */
+	{
+		write_eventlog(ERROR, errbuf, strlen(errbuf));
+	}
+	else
+	{
+		/* Not running as service, write to stderr */
+		write_console(errbuf, strlen(errbuf));
+		fflush(stderr);
+	}
+#endif
+	va_end(ap);
+}
 
 
 /*
