@@ -1,10 +1,12 @@
 TARGET=mongo_sql
 ARLIB = lib$(TARGET).a
 
-SRC_FILES := $(wildcard postgres/**/*.c parse/*.c)
+rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
+
+SRC_FILES := $(call rwildcard,postgres/,*.c) $(wildcard parse/*.c)
 OBJ_FILES := $(SRC_FILES:.c=.o)
 
-CFLAGS = -I. -I./postgres/include
+CFLAGS = -I. -I./postgres/include -Wfatal-errors
 LIBPATH = -L.
 
 CC ?= cc
