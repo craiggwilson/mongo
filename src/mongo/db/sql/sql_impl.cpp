@@ -30,27 +30,96 @@
 
 #include "mongo/platform/basic.h"
 
+#include <pg_query.h>
+
+#include "mongo/db/json.h"
 #include "mongo/db/sql/sql_impl.h"
+#include "mongo/util/scopeguard.h"
+
+// This is gross, but they aren't doing it in their headers so we need to include them like this.
+// Also they are really macro heavy so this needs to be included *after* all of our headers.
+extern "C" {
+#include <postgres.h>  // This needs to be first.
+
+#include <nodes/parsenodes.h>
+#include <pg_query_internal.h>
+#include <pg_query_json.h>
+}
 
 namespace mongo {
 
 const auto reserveErrorCodes = ErrorCodes::Error(70000);  // reserve error codes >= 70000
 
+/**
+ * An RAII object that enters and exits a pg_query MemoryContext while in scope.
+ */
+class PgScopedMemoryContext {
+public:
+    explicit PgScopedMemoryContext(const char* name)
+        : _memCtx(pg_query_enter_memory_context(name)) {}
+
+    ~PgScopedMemoryContext() {
+        pg_query_exit_memory_context(_memCtx);
+    }
+
+    PgScopedMemoryContext(PgScopedMemoryContext&&) = delete;
+    PgScopedMemoryContext& operator=(PgScopedMemoryContext&&) = delete;
+
+private:
+    MemoryContext _memCtx;
+};
+
 std::vector<BSONObj> runSQL(OperationContext* opCtx,
                             const std::string& dbName,
                             const std::string& sql) {
-    std::vector<BSONObj> results;
+    std::vector<BSONObj> rows;
 
-    // Put your code here.
-    results.push_back(BSON("key"
-                           << "value"
-                           << "look"
-                           << "a string!"
-                           << "db"
-                           << dbName
-                           << "query"
-                           << sql));
+    auto builder = BSONObjBuilder(BSON("db" << dbName << "query" << sql));
 
-    return results;
+    PgQueryParseResult result = pg_query_parse(sql.c_str());
+    ON_BLOCK_EXIT([&] { pg_query_free_parse_result(result); });  // TODO wrap this in a type dtor.
+
+    uassert(70002,
+            str::stream() << "Error parsing SQL at " << result.error->cursorpos << ": "
+                          << result.error->message,
+            !result.error);
+
+    builder.append("parsed", result.parse_tree);
+    builder.append("parsed_tree", BSONArray(fromjson(result.parse_tree)));
+
+    {
+        PgScopedMemoryContext memCtx("mongo_sql_prarsing");
+        PgQueryInternalParsetreeAndError rawResult = pg_query_raw_parse(sql.c_str());
+        ON_BLOCK_EXIT([&] { free(rawResult.stderr_buffer); });  // TODO wrap this in a type dtor.
+        if (rawResult.error) {
+            ON_BLOCK_EXIT(
+                [&] { pg_query_free_error(rawResult.error); });  // TODO wrap this in a type dtor.
+
+            uasserted(70003,
+                      str::stream() << "Error raw parsing SQL at " << rawResult.error->cursorpos
+                                    << ": "
+                                    << rawResult.error->message);
+        }
+
+        BSONArrayBuilder rawBuilder(builder.subarrayStart("raw_tree"));
+        for (ListCell* stmtCell = list_head(rawResult.tree); stmtCell; stmtCell = lnext(stmtCell)) {
+            invariant(IsA(stmtCell->data.ptr_value, RawStmt));
+            auto rawStmt = castNode(RawStmt, stmtCell->data.ptr_value);
+            if (IsA(rawStmt->stmt, SelectStmt)) {
+                auto stmt = castNode(SelectStmt, rawStmt->stmt);
+                BSONObjBuilder selectBuilder(rawBuilder.subobjStart());
+                selectBuilder.append("kind", "SELECT");
+                selectBuilder.append("from", pg_query_nodes_to_json(stmt->fromClause));
+                selectBuilder.append("where", pg_query_nodes_to_json(stmt->whereClause));
+                selectBuilder.append("targets", pg_query_nodes_to_json(stmt->targetList));
+                // Just doing a few to get you started.
+            }
+        }
+    }
+
+
+    rows.push_back(builder.obj());
+
+    return rows;
 }
 }

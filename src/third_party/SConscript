@@ -18,6 +18,7 @@ timelibSuffix = '-2018.01alpha1'
 tomcryptSuffix = '-1.18.1'
 benchmarkSuffix = '-1.3.0'
 sqliteSuffix = '-amalgamation-3190300'
+pg_querySuffix = '-10-1.0.2'
 
 thirdPartyIncludePathList = [
     ('s2', '#/src/third_party/s2'),
@@ -110,6 +111,12 @@ def injectThirdPartyIncludePaths(thisEnv, libraries):
     thisEnv.PrependUnique(CPPPATH=[
         entry[1] for entry in thirdPartyIncludePathList if entry[0] in libraries])
 
+thirdPartyIncludePathList.append(
+    ('pg_query', ['#/src/third_party/libpg_query' + pg_querySuffix,
+                  '#/src/third_party/libpg_query' + pg_querySuffix + '/src',
+                  '#/src/third_party/libpg_query' + pg_querySuffix + '/src/postgres/include',
+                  ]))
+
 env.AddMethod(injectAllThirdPartyIncludePaths, 'InjectAllThirdPartyIncludePaths')
 env.AddMethod(injectThirdPartyIncludePaths, 'InjectThirdPartyIncludePaths')
 
@@ -118,6 +125,8 @@ env = env.Clone()
 murmurEnv = env.Clone()
 murmurEnv.SConscript('murmurhash3/SConscript', exports={ 'env' : murmurEnv })
 
+#pgEnv = env.Clone()
+#pgEnv.SConscript('libpg_query' + pg_querySuffix + '/SConscript', exports={ 'env' : pgEnv })
 
 s2Env = env.Clone()
 s2Env.InjectThirdPartyIncludePaths(libraries=['s2', 'boost'])
@@ -218,6 +227,18 @@ zlibEnv.Library(
     target="shim_zlib",
     source=[
         'shim_zlib.cpp',
+    ])
+
+pgEnv = env.Clone()
+pgEnv.InjectThirdPartyIncludePaths(libraries=['pg_query'])
+pgEnv.SConscript('libpg_query' + pg_querySuffix + '/SConscript', exports={ 'env' : pgEnv })
+pgEnv.Library(
+    target="shim_pg_query",
+    source=[
+        'shim_pg_query.cpp',
+    ],
+    LIBDEPS_INTERFACE=[
+        'libpg_query' + pg_querySuffix + '/pg_query',
     ])
 
 if use_system_version_of_library("google-benchmark"):
