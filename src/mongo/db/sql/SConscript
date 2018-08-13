@@ -1,0 +1,15 @@
+Import("env")
+
+env = env.Clone()
+
+env.Library(
+    target='sql',
+    source=[
+    'sql_command.cpp',
+    'sql_impl.cpp',
+    ],
+    LIBDEPS=[
+        "$BUILD_DIR/mongo/base",
+        "$BUILD_DIR/mongo/mongodmain", # Access to everything linked into mongod
+    ],
+)

@@ -29,7 +29,7 @@ except ImportError:
 ASSERT_NAMES = ["uassert", "massert", "fassert", "fassertFailed"]
 MINIMUM_CODE = 10000
 # This limit is intended to be increased by 1000 when we get close.
-MAXIMUM_CODE = 51999
+MAXIMUM_CODE = 71999
 
 # pylint: disable=invalid-name
 codes = []  # type: ignore

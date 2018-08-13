@@ -32,6 +32,7 @@ env.SConscript(
         'repl',
         's',
         'sorter',
+        'sql',
         'stats',
         'storage',
         'update',

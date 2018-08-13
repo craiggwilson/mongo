@@ -249,7 +249,7 @@ def libdeps_emitter(target, source, env):
 
     prereqs = [dependency(l, False, dependency.Public) for l in env.get(libdeps_env_var, []) if l]
     prereqs.extend(dependency(l, False, dependency.Interface) for l in env.get(libdeps_env_var + '_INTERFACE', []) if l)
-    prereqs.extend(dependency(l, False, dependency.Private) for l in env.get(libdeps_env_var + '_PRIVATE', []) if l)
+    prereqs.extend(dependency(l, False, dependency.Public) for l in env.get(libdeps_env_var + '_PRIVATE', []) if l)
 
     for prereq in prereqs:
         prereqWithIxes = SCons.Util.adjustixes(
@@ -310,7 +310,7 @@ def shlibdeps_emitter(target, source, env):
 
     prereqs = [dependency(l, True, dependency.Public) for l in env.get(libdeps_env_var, []) if l]
     prereqs.extend(dependency(l, True, dependency.Interface) for l in env.get(libdeps_env_var + '_INTERFACE', []) if l)
-    prereqs.extend(dependency(l, True, dependency.Private) for l in env.get(libdeps_env_var + '_PRIVATE', []) if l)
+    prereqs.extend(dependency(l, True, dependency.Public) for l in env.get(libdeps_env_var + '_PRIVATE', []) if l)
 
     for prereq in prereqs:
         prereqWithIxes = SCons.Util.adjustixes(

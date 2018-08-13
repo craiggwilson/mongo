@@ -365,6 +365,7 @@ mongod = env.Program(
     LIBDEPS=[
         'base',
         'mongodmain',
+        'db/sql/sql',
     ],
     INSTALL_ALIAS=[
         'core',
