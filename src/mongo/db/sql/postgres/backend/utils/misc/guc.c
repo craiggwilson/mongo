@@ -458,7 +458,7 @@
 // bool		default_with_oids = false;
 // bool		session_auth_is_superuser;
 
-// int			log_min_error_statement = ERROR;
+int			log_min_error_statement = ERROR;
 int			log_min_messages = WARNING;
 int			client_min_messages = NOTICE;
 // int			log_min_duration_statement = -1;
@@ -477,7 +477,7 @@ int			client_min_messages = NOTICE;
 
 // char	   *pgstat_temp_directory;
 
-// char	   *application_name;
+char	   *application_name;
 
 // int			tcp_keepalives_idle;
 // int			tcp_keepalives_interval;

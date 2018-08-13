@@ -2841,25 +2841,25 @@ write_csvlog(ErrorData *edata)
 	pfree(buf.data);
 }
 
-// /*
-//  * Unpack MAKE_SQLSTATE code. Note that this returns a pointer to a
-//  * static buffer.
-//  */
-// char *
-// unpack_sql_state(int sql_state)
-// {
-// 	static char buf[12];
-// 	int			i;
+/*
+ * Unpack MAKE_SQLSTATE code. Note that this returns a pointer to a
+ * static buffer.
+ */
+char *
+unpack_sql_state(int sql_state)
+{
+	static char buf[12];
+	int			i;
 
-// 	for (i = 0; i < 5; i++)
-// 	{
-// 		buf[i] = PGUNSIXBIT(sql_state);
-// 		sql_state >>= 6;
-// 	}
+	for (i = 0; i < 5; i++)
+	{
+		buf[i] = PGUNSIXBIT(sql_state);
+		sql_state >>= 6;
+	}
 
-// 	buf[i] = '\0';
-// 	return buf;
-// }
+	buf[i] = '\0';
+	return buf;
+}
 
 
 /*

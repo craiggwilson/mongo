@@ -66,34 +66,34 @@ resetStringInfo(StringInfo str)
 	str->cursor = 0;
 }
 
-// /*
-//  * appendStringInfo
-//  *
-//  * Format text data under the control of fmt (an sprintf-style format string)
-//  * and append it to whatever is already in str.  More space is allocated
-//  * to str if necessary.  This is sort of like a combination of sprintf and
-//  * strcat.
-//  */
-// void
-// appendStringInfo(StringInfo str, const char *fmt,...)
-// {
-// 	for (;;)
-// 	{
-// 		va_list		args;
-// 		int			needed;
+/*
+ * appendStringInfo
+ *
+ * Format text data under the control of fmt (an sprintf-style format string)
+ * and append it to whatever is already in str.  More space is allocated
+ * to str if necessary.  This is sort of like a combination of sprintf and
+ * strcat.
+ */
+void
+appendStringInfo(StringInfo str, const char *fmt,...)
+{
+	for (;;)
+	{
+		va_list		args;
+		int			needed;
 
-// 		/* Try to format the data. */
-// 		va_start(args, fmt);
-// 		needed = appendStringInfoVA(str, fmt, args);
-// 		va_end(args);
+		/* Try to format the data. */
+		va_start(args, fmt);
+		needed = appendStringInfoVA(str, fmt, args);
+		va_end(args);
 
-// 		if (needed == 0)
-// 			break;				/* success */
+		if (needed == 0)
+			break;				/* success */
 
-// 		/* Increase the buffer size and try again. */
-// 		enlargeStringInfo(str, needed);
-// 	}
-// }
+		/* Increase the buffer size and try again. */
+		enlargeStringInfo(str, needed);
+	}
+}
 
 /*
  * appendStringInfoVA
@@ -147,82 +147,82 @@ appendStringInfoVA(StringInfo str, const char *fmt, va_list args)
 	return (int) nprinted;
 }
 
-// /*
-//  * appendStringInfoString
-//  *
-//  * Append a null-terminated string to str.
-//  * Like appendStringInfo(str, "%s", s) but faster.
-//  */
-// void
-// appendStringInfoString(StringInfo str, const char *s)
-// {
-// 	appendBinaryStringInfo(str, s, strlen(s));
-// }
+/*
+ * appendStringInfoString
+ *
+ * Append a null-terminated string to str.
+ * Like appendStringInfo(str, "%s", s) but faster.
+ */
+void
+appendStringInfoString(StringInfo str, const char *s)
+{
+	appendBinaryStringInfo(str, s, strlen(s));
+}
 
-// /*
-//  * appendStringInfoChar
-//  *
-//  * Append a single byte to str.
-//  * Like appendStringInfo(str, "%c", ch) but much faster.
-//  */
-// void
-// appendStringInfoChar(StringInfo str, char ch)
-// {
-// 	/* Make more room if needed */
-// 	if (str->len + 1 >= str->maxlen)
-// 		enlargeStringInfo(str, 1);
+/*
+ * appendStringInfoChar
+ *
+ * Append a single byte to str.
+ * Like appendStringInfo(str, "%c", ch) but much faster.
+ */
+void
+appendStringInfoChar(StringInfo str, char ch)
+{
+	/* Make more room if needed */
+	if (str->len + 1 >= str->maxlen)
+		enlargeStringInfo(str, 1);
 
-// 	/* OK, append the character */
-// 	str->data[str->len] = ch;
-// 	str->len++;
-// 	str->data[str->len] = '\0';
-// }
+	/* OK, append the character */
+	str->data[str->len] = ch;
+	str->len++;
+	str->data[str->len] = '\0';
+}
 
-// /*
-//  * appendStringInfoSpaces
-//  *
-//  * Append the specified number of spaces to a buffer.
-//  */
-// void
-// appendStringInfoSpaces(StringInfo str, int count)
-// {
-// 	if (count > 0)
-// 	{
-// 		/* Make more room if needed */
-// 		enlargeStringInfo(str, count);
+/*
+ * appendStringInfoSpaces
+ *
+ * Append the specified number of spaces to a buffer.
+ */
+void
+appendStringInfoSpaces(StringInfo str, int count)
+{
+	if (count > 0)
+	{
+		/* Make more room if needed */
+		enlargeStringInfo(str, count);
 
-// 		/* OK, append the spaces */
-// 		while (--count >= 0)
-// 			str->data[str->len++] = ' ';
-// 		str->data[str->len] = '\0';
-// 	}
-// }
+		/* OK, append the spaces */
+		while (--count >= 0)
+			str->data[str->len++] = ' ';
+		str->data[str->len] = '\0';
+	}
+}
 
-// /*
-//  * appendBinaryStringInfo
-//  *
-//  * Append arbitrary binary data to a StringInfo, allocating more space
-//  * if necessary. Ensures that a trailing null byte is present.
-//  */
-// void
-// appendBinaryStringInfo(StringInfo str, const char *data, int datalen)
-// {
-// 	Assert(str != NULL);
+/*
+ * appendBinaryStringInfo
+ *
+ * Append arbitrary binary data to a StringInfo, allocating more space
+ * if necessary. Ensures that a trailing null byte is present.
+ */
+void
+appendBinaryStringInfo(StringInfo str, const char *data, int datalen)
+{
+	Assert(str != NULL);
 
-// 	/* Make more room if needed */
-// 	enlargeStringInfo(str, datalen);
+	/* Make more room if needed */
+	enlargeStringInfo(str, datalen);
 
-// 	/* OK, append the data */
-// 	memcpy(str->data + str->len, data, datalen);
-// 	str->len += datalen;
+	/* OK, append the data */
+	memcpy(str->data + str->len, data, datalen);
+	str->len += datalen;
 
-// 	/*
-// 	 * Keep a trailing null in place, even though it's probably useless for
-// 	 * binary data.  (Some callers are dealing with text but call this because
-// 	 * their input isn't null-terminated.)
-// 	 */
-// 	str->data[str->len] = '\0';
-// }
+	/*
+	 * Keep a trailing null in place, even though it's probably useless for
+	 * binary data.  (Some callers are dealing with text but call this because
+	 * their input isn't null-terminated.)
+	 */
+	str->data[str->len] = '\0';
+}
 
 // /*
 //  * appendBinaryStringInfoNT

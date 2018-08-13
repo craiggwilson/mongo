@@ -351,7 +351,7 @@
 bool		ClientAuthInProgress = false;	/* T during new-client
 											 * authentication */
 
-// bool		redirection_done = false;	/* stderr redirected for syslogger? */
+bool		redirection_done = false;	/* stderr redirected for syslogger? */
 
 // /* received START_AUTOVAC_LAUNCHER signal */
 // static volatile sig_atomic_t start_autovac_launcher = false;
