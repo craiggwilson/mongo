@@ -3,16 +3,63 @@ Import("env")
 env = env.Clone()
 
 env.InjectThirdPartyIncludePaths(libraries=['pg_query'])
+env.InjectThirdPartyIncludePaths(libraries=['asio'])
 
 env.Library(
     target='sql',
     source=[
     'sql_command.cpp',
     'sql_impl.cpp',
+    'sql_network_layer.cpp',
     ],
     LIBDEPS=[
+        # These are copied directly from mongodmain and should probably be pared down at some point.
+        '$BUILD_DIR/mongo/db/auth/authmongod',
+        '$BUILD_DIR/mongo/db/catalog/health_log',
+        '$BUILD_DIR/mongo/db/commands/mongod',
+        '$BUILD_DIR/mongo/db/commands/mongod_fcv',
+        '$BUILD_DIR/mongo/db/commands/server_status_servers',
+        '$BUILD_DIR/mongo/db/dbdirectclient',
+        '$BUILD_DIR/mongo/db/free_mon/free_mon_mongod',
+        '$BUILD_DIR/mongo/db/ftdc/ftdc_mongod',
+        '$BUILD_DIR/mongo/db/index_d',
+        '$BUILD_DIR/mongo/db/initialize_snmp',
+        '$BUILD_DIR/mongo/db/keys_collection_client_direct',
+        '$BUILD_DIR/mongo/db/kill_sessions_local',
+        '$BUILD_DIR/mongo/db/logical_session_cache_factory_mongod',
+        '$BUILD_DIR/mongo/db/mongod_options',
+        '$BUILD_DIR/mongo/db/mongodandmongos',
+        '$BUILD_DIR/mongo/db/op_observer_d',
+        '$BUILD_DIR/mongo/db/periodic_runner_job_abort_expired_transactions',
+        '$BUILD_DIR/mongo/db/periodic_runner_job_decrease_snapshot_cache_pressure',
+        '$BUILD_DIR/mongo/db/query_exec',
+        '$BUILD_DIR/mongo/db/repair_database',
+        '$BUILD_DIR/mongo/db/repair_database_and_check_version',
+        '$BUILD_DIR/mongo/db/repl/repl_set_commands',
+        '$BUILD_DIR/mongo/db/repl/storage_interface_impl',
+        '$BUILD_DIR/mongo/db/repl/topology_coordinator',
+        '$BUILD_DIR/mongo/db/s/balancer',
+        '$BUILD_DIR/mongo/db/s/sharding_runtime_d',
+        '$BUILD_DIR/mongo/db/serveronly',
+        '$BUILD_DIR/mongo/db/service_context_d',
+        '$BUILD_DIR/mongo/db/startup_warnings_mongod',
+        '$BUILD_DIR/mongo/db/storage/backup_cursor_service',
+        '$BUILD_DIR/mongo/db/system_index',
+        '$BUILD_DIR/mongo/db/ttl_d',
+        '$BUILD_DIR/mongo/executor/network_interface_factory',
+        '$BUILD_DIR/mongo/mongod_options_init',
+        '$BUILD_DIR/mongo/rpc/rpc',
+        '$BUILD_DIR/mongo/s/commands/shared_cluster_commands',
+        '$BUILD_DIR/mongo/transport/service_entry_point',
+        '$BUILD_DIR/mongo/transport/transport_layer_manager',
+        '$BUILD_DIR/mongo/util/clock_sources',
+        '$BUILD_DIR/mongo/util/fail_point',
+        '$BUILD_DIR/mongo/util/ntservice',
+        '$BUILD_DIR/mongo/util/options_parser/options_parser_init',
+        '$BUILD_DIR/mongo/util/periodic_runner_factory',
+        '$BUILD_DIR/mongo/util/version_impl',
         "$BUILD_DIR/mongo/base",
-        "$BUILD_DIR/mongo/mongodmain", # Access to everything linked into mongod
+
         "$BUILD_DIR/third_party/shim_pg_query",
     ],
 )

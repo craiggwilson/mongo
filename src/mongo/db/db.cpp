@@ -123,6 +123,7 @@
 #include "mongo/db/service_entry_point_mongod.h"
 #include "mongo/db/session_catalog.h"
 #include "mongo/db/session_killer.h"
+#include "mongo/db/sql/sql_network_layer.h"
 #include "mongo/db/startup_warnings_mongod.h"
 #include "mongo/db/stats/counters.h"
 #include "mongo/db/storage/backup_cursor_service.h"
@@ -651,6 +652,9 @@ ExitCode _initAndListen(int listenPort) {
         error() << "Failed to start the listener: " << start.toString();
         return EXIT_NET_ERROR;
     }
+
+    SqlNetworkLayer::get(serviceContext) = makeSqlNetworkLayer();
+    SqlNetworkLayer::get(serviceContext)->start();
 
     serviceContext->notifyStartupComplete();
 

@@ -339,6 +339,7 @@ env.Library(
         'util/options_parser/options_parser_init',
         'util/periodic_runner_factory',
         'util/version_impl',
+        'db/sql/sql',
     ],
 )
 
@@ -365,7 +366,6 @@ mongod = env.Program(
     LIBDEPS=[
         'base',
         'mongodmain',
-        'db/sql/sql',
     ],
     INSTALL_ALIAS=[
         'core',

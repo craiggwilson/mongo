@@ -35,6 +35,89 @@
 #include "mongo/db/operation_context.h"
 
 namespace mongo {
+
+using PgOid = int32_t;
+
+enum class PgType : PgOid {
+    // For now we only support returning Strings. Other types can be added later.
+    kText = 25,
+};
+
+struct SqlColumnDesc {
+    std::string name;  // For now only fill this in.
+
+    PgOid sourceTable = 0;
+    int16_t sourceColumn = 0;
+
+    PgType type = PgType::kText;
+    int16_t typeSize = -1;
+    int32_t typeMod = 0;
+
+    // Unrelated to PgType::kText. This is about the wire encoding. 0 = text, 1 = binary.
+    int16_t textOrBinaryFormat = 0;
+};
+
+/**
+ * Send replies to the client. Calls should follow one of these flows for each statement in the
+ * request.
+ *
+ * Flow A: (For statements that return rows)
+ *  - One call to sendRowDesc()
+ *  - Zero or more calls to sendDataRow()
+ *  - One call to sendCommandComplete()
+ *
+ * Flow B: (For statements that don't return rows)
+ *  - One call to sendCommandComplete()
+ *
+ * Flow C: (Only for the empty statement)
+ *  - One call to sendEmptyQueryResponse()
+ */
+class SqlReplySender {
+public:
+    virtual void sendRowDesc(const std::vector<SqlColumnDesc>& colls) = 0;
+
+    /**
+     * For now this only supports returning text-format, not binary format.
+     */
+    virtual void sendDataRow(const std::vector<boost::optional<std::string>>& colls) = 0;
+
+    /**
+     * msg should start with the "Command Tag" which identifies the command that is running.
+     *
+     * For SELECT operations it should be "SELECT " + count of rows returned.
+     */
+    virtual void sendCommandComplete(StringData msg) = 0;
+
+    /**
+     * Call this when the request is empty.
+     */
+    virtual void sendEmptyQueryResponse() = 0;
+
+    /**
+     * Returns the number of calls to sendDataRow() since the last call to sendRowDesc().
+     * Only valid to call between calling sendRowDesc() and sendCommandComplete().
+     */
+    virtual int64_t nRowsSent() const = 0;
+
+protected:
+    SqlReplySender() = default;
+    ~SqlReplySender() = default;  // Never destroyed polymorphically.
+
+    SqlReplySender(SqlReplySender&&) = delete;
+};
+
+/**
+ * This is used by the PGSQL wire interface.
+ */
+void runSQL2(OperationContext* opCtx,
+             const std::string& dbName,
+             const std::string& sql,
+             SqlReplySender* replySender);
+
+/**
+ * This is used by the "sql" command.
+ * It will probably go away soon.
+ */
 std::vector<BSONObj> runSQL(OperationContext* opCtx,
                             const std::string& dbName,
                             const std::string& sql);
