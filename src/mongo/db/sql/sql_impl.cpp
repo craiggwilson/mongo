@@ -75,8 +75,8 @@ void runSQL2(OperationContext* opCtx,
              const std::string& sql,
              SqlReplySender* replySender) {
     
-    SqlDummyExecutor executor;
-    executor.execute(opCtx, replySender);
+    auto executor = makeSqlExecutor(dbName, sql);
+    executor->execute(opCtx, replySender);
 }
 
 std::vector<BSONObj> runSQL(OperationContext* opCtx,

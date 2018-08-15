@@ -70,4 +70,8 @@ void SqlDummyExecutor::execute(OperationContext* opCtx, SqlReplySender* replySen
 
     replySender->sendCommandComplete(str::stream() << "SELECT " << replySender->nRowsSent());
 }
+
+std::unique_ptr<SqlExecutor> makeSqlExecutor(const std::string& dbName, const std::string& sql) {
+    return std::make_unique<SqlDummyExecutor>();
+}
 }
