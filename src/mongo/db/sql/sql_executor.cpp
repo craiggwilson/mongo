@@ -29,49 +29,125 @@
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
 
 #include <string>
+#include <vector>
 
 #include "mongo/db/operation_context.h"
 #include "mongo/db/sql/sql_executor.h"
 #include "mongo/db/sql/sql_impl.h"
+#include "mongo/db/jsobj.h"
+
+#include <pg_query.h>
+
+// This is gross, but they aren't doing it in their headers so we need to include them like this.
+// Also they are really macro heavy so this needs to be included *after* all of our headers.
+extern "C" {
+#include <postgres.h>  // This needs to be first.
+
+#include <nodes/parsenodes.h>
+#include <pg_query_internal.h>
+}
 
 namespace mongo {
 
-void SqlDummyExecutor::execute(OperationContext* opCtx, SqlReplySender* replySender) {
-    // Dummy data
-    const auto colls = std::vector<std::string>{"a", "b", "c"};
-    const size_t nRows = 5;
+namespace {
 
-    {
-        // Prepare the header.
-        auto rowDesc = std::vector<SqlColumnDesc>();
-        for (auto&& collName : colls) {
-            rowDesc.push_back(SqlColumnDesc{collName});
+class SqlDummyExecutor final : public SqlExecutor {
+public:
+    void execute(SqlReplySender* replySender) override {
+        // Dummy data
+        const auto colls = std::vector<std::string>{"a", "b", "c"};
+        const size_t nRows = 5;
+
+        {
+            // Prepare the header.
+            auto rowDesc = std::vector<SqlColumnDesc>();
+            for (auto&& collName : colls) {
+                rowDesc.push_back(SqlColumnDesc{collName});
+            }
+            replySender->sendRowDesc(rowDesc);
         }
-        replySender->sendRowDesc(rowDesc);
-    }
 
 
-    for (size_t rowNum = 0; rowNum < nRows; rowNum++) {
-        const size_t base = rowNum * colls.size();
-        std::vector<boost::optional<std::string>> rowData;
-        for (size_t collNum = 0; collNum < colls.size(); collNum++) {
-            const auto data = base + collNum;
-            if (data % 5 == 0) {
-                // Simulate a null.
-                rowData.emplace_back(boost::none);
-                continue;
+        for (size_t rowNum = 0; rowNum < nRows; rowNum++) {
+            const size_t base = rowNum * colls.size();
+            std::vector<boost::optional<std::string>> rowData;
+            for (size_t collNum = 0; collNum < colls.size(); collNum++) {
+                const auto data = base + collNum;
+                if (data % 5 == 0) {
+                    // Simulate a null.
+                    rowData.emplace_back(boost::none);
+                    continue;
+                }
+
+                rowData.emplace_back(std::to_string(data));
             }
 
-            rowData.emplace_back(std::to_string(data));
+            replySender->sendDataRow(rowData);
         }
 
-        replySender->sendDataRow(rowData);
+        replySender->sendCommandComplete(str::stream() << "SELECT " << replySender->nRowsSent());
+    }
+};
+
+class SqlInsertExecutor final : public SqlExecutor {
+public:
+    SqlInsertExecutor(std::string databaseName, std::string collectionName, BSONObj obj) {
+        _obj = obj;
     }
 
-    replySender->sendCommandComplete(str::stream() << "SELECT " << replySender->nRowsSent());
+    void execute(SqlReplySender* replySender) override {
+        replySender->sendEmptyQueryResponse();
+    }
+private:
+    BSONObj _obj;
+};
+
+/**
+ * An RAII object that enters and exits a pg_query MemoryContext while in scope.
+ */
+class PgScopedMemoryContext {
+public:
+    explicit PgScopedMemoryContext(const char* name)
+        : _memCtx(pg_query_enter_memory_context(name)) {}
+
+    ~PgScopedMemoryContext() {
+        pg_query_exit_memory_context(_memCtx);
+    }
+
+    PgScopedMemoryContext(PgScopedMemoryContext&&) = delete;
+    PgScopedMemoryContext& operator=(PgScopedMemoryContext&&) = delete;
+
+private:
+    MemoryContext _memCtx;
+};
 }
 
-std::unique_ptr<SqlExecutor> makeSqlExecutor(const std::string& dbName, const std::string& sql) {
+std::unique_ptr<SqlExecutor> makeSqlExecutor(OperationContext* opCtx, const std::string& databaseName, const std::string& sql) {
+    PgScopedMemoryContext memCtx("mongo_sql_parsing");
+    PgQueryInternalParsetreeAndError rawResult = pg_query_raw_parse(sql.c_str());
+    ON_BLOCK_EXIT([&] { free(rawResult.stderr_buffer); });  // TODO wrap this in a type dtor.
+    if (rawResult.error) {
+        ON_BLOCK_EXIT(
+            [&] { pg_query_free_error(rawResult.error); });  // TODO wrap this in a type dtor.
+
+        uasserted(70010,
+                    str::stream() << "Error raw parsing SQL at " << rawResult.error->cursorpos
+                                << ": "
+                                << rawResult.error->message);
+    }
+
+    for (ListCell* stmtCell = list_head(rawResult.tree); stmtCell; stmtCell = lnext(stmtCell)) {
+        invariant(IsA(stmtCell->data.ptr_value, RawStmt));
+        auto rawStmt = castNode(RawStmt, stmtCell->data.ptr_value);
+
+        switch(rawStmt->stmt->type) {
+            case T_InsertStmt:
+                return std::make_unique<SqlInsertExecutor>(databaseName, "temp", BSON("a" << 1 << "b" << 1));
+            default:
+                return std::make_unique<SqlDummyExecutor>();
+        }
+    }
+    
     return std::make_unique<SqlDummyExecutor>();
 }
 }

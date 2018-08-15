@@ -37,19 +37,17 @@ class SqlExecutor {
 public:
     ~SqlExecutor() = default;  // Never destroyed polymorphically.
 
-    virtual void execute(OperationContext* opCtx, SqlReplySender* replySender) = 0;
+    virtual void execute(SqlReplySender* replySender) = 0;
 
 protected:
     SqlExecutor() = default;
     SqlExecutor(SqlExecutor&&) = delete;
 };
 
-class SqlDummyExecutor final : public SqlExecutor {
-public:
-    void execute(OperationContext* opCtx, SqlReplySender* replySender) override;
-};
-
 std::unique_ptr<SqlExecutor> makeSqlExecutor(
-    const std::string& dbName,
-    const std::string& sql);
+    OperationContext* opCtx,
+    const std::string& databaseName,
+    const std::string& sql
+);
+
 }
