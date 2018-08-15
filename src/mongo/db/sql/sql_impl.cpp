@@ -33,6 +33,7 @@
 #include <pg_query.h>
 
 #include "mongo/db/json.h"
+#include "mongo/db/sql/sql_executor.h"
 #include "mongo/db/sql/sql_impl.h"
 #include "mongo/util/scopeguard.h"
 
@@ -73,38 +74,9 @@ void runSQL2(OperationContext* opCtx,
              const std::string& dbName,
              const std::string& sql,
              SqlReplySender* replySender) {
-    // Dummy data
-    const auto colls = std::vector<std::string>{"a", "b", "c"};
-    const size_t nRows = 5;
-
-    {
-        // Prepare the header.
-        auto rowDesc = std::vector<SqlColumnDesc>();
-        for (auto&& collName : colls) {
-            rowDesc.push_back(SqlColumnDesc{collName});
-        }
-        replySender->sendRowDesc(rowDesc);
-    }
-
-
-    for (size_t rowNum = 0; rowNum < nRows; rowNum++) {
-        const size_t base = rowNum * colls.size();
-        std::vector<boost::optional<std::string>> rowData;
-        for (size_t collNum = 0; collNum < colls.size(); collNum++) {
-            const auto data = base + collNum;
-            if (data % 5 == 0) {
-                // Simulate a null.
-                rowData.emplace_back(boost::none);
-                continue;
-            }
-
-            rowData.emplace_back(std::to_string(data));
-        }
-
-        replySender->sendDataRow(rowData);
-    }
-
-    replySender->sendCommandComplete(str::stream() << "SELECT " << replySender->nRowsSent());
+    
+    SqlDummyExecutor executor;
+    executor.execute(opCtx, replySender);
 }
 
 std::vector<BSONObj> runSQL(OperationContext* opCtx,

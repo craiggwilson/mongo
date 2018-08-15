@@ -9,6 +9,7 @@ env.Library(
     target='sql',
     source=[
     'sql_command.cpp',
+    'sql_executor.cpp',
     'sql_impl.cpp',
     'sql_network_layer.cpp',
     ],
