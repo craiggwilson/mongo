@@ -51,6 +51,21 @@ namespace mongo {
 
 namespace {
 
+class SqlCompositeExecutor final : public SqlExecutor {
+public:
+    SqlCompositeExecutor(const std::vector<SqlExecutor*>& executors)
+        : _executors{std::move(executors)} {}
+
+    void execute(SqlReplySender* replySender) override {
+        for(auto const& it: _executors) {
+            it->execute(replySender);
+        }
+    }
+
+private:
+    const std::vector<SqlExecutor*> _executors;
+};
+
 class SqlDummyExecutor final : public SqlExecutor {
 public:
     void execute(SqlReplySender* replySender) override {
@@ -136,18 +151,22 @@ std::unique_ptr<SqlExecutor> makeSqlExecutor(OperationContext* opCtx, const std:
                                 << rawResult.error->message);
     }
 
+    //TODO this should probably be vector<std:unique_ptr<SqlExecutor>>, but I can't make that work...
+    std::vector<SqlExecutor*> executors;
     for (ListCell* stmtCell = list_head(rawResult.tree); stmtCell; stmtCell = lnext(stmtCell)) {
         invariant(IsA(stmtCell->data.ptr_value, RawStmt));
         auto rawStmt = castNode(RawStmt, stmtCell->data.ptr_value);
 
         switch(rawStmt->stmt->type) {
             case T_InsertStmt:
-                return std::make_unique<SqlInsertExecutor>(databaseName, "temp", BSON("a" << 1 << "b" << 1));
+                executors.push_back(new SqlInsertExecutor(databaseName, "temp", BSON("a" << 1 << "b" << 1)));
+                break;
             default:
-                return std::make_unique<SqlDummyExecutor>();
+                executors.push_back(new SqlDummyExecutor());
+                break;
         }
     }
     
-    return std::make_unique<SqlDummyExecutor>();
+    return std::make_unique<SqlCompositeExecutor>(executors);
 }
 }

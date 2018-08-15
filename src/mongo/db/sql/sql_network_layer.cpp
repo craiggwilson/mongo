@@ -204,6 +204,7 @@ public:
     void sendCommandComplete(StringData msg) override {
         invariant(_state == kSendingRows);
         _state = kInit;
+        _nRowsSent = 0;
 
         asio::write(_socket,
                     SqlMessageBuilder(SqlMessage::Kind::kCommandComplete)  //
