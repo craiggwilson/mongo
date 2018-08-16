@@ -48,7 +48,7 @@ class SqlPlanner {
 public:
     ~SqlPlanner() = default;  // Never destroyed polymorphically.
 
-    virtual SqlExecutor* plan(RawStmt *rawStmt) = 0;
+    virtual std::unique_ptr<SqlExecutor> plan(RawStmt *rawStmt) = 0;
 
 protected:
     SqlPlanner() = default;

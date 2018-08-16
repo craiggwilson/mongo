@@ -28,6 +28,7 @@
 
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
 
+#include <memory>
 #include <string>
 
 #include "mongo/db/operation_context.h"
@@ -57,18 +58,18 @@ public:
             _opCtx = opCtx;
         }
 
-    SqlExecutor* plan(RawStmt *rawStmt) {
+    std::unique_ptr<SqlExecutor> plan(RawStmt *rawStmt) {
         switch(nodeTag(rawStmt->stmt)) {
             case T_InsertStmt:
                 return planInsert((InsertStmt*)rawStmt->stmt);
             default:
-                return new SqlDummyExecutor();
+                return std::make_unique<SqlDummyExecutor>();
         }
     }
 private:
 
-    SqlInsertExecutor* planInsert(InsertStmt* stmt) {
-        return new SqlInsertExecutor(_databaseName, "temp", BSON("a" << 1 << "b" << 1));
+    std::unique_ptr<SqlExecutor> planInsert(InsertStmt* stmt) {
+        return std::make_unique<SqlInsertExecutor>(_databaseName, "temp", BSON("a" << 1 << "b" << 1));
     }
 
     const OperationContext* _opCtx;
