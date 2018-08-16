@@ -51,41 +51,66 @@ extern "C" {
 namespace mongo {
 
 namespace {
-    /**
- * An RAII object that enters and exits a pg_query MemoryContext while in scope.
- */
-class PgScopedMemoryContext {
-public:
-    explicit PgScopedMemoryContext(const char* name)
-        : _memCtx(pg_query_enter_memory_context(name)) {}
 
-    ~PgScopedMemoryContext() {
-        pg_query_exit_memory_context(_memCtx);
+class SqlDefaultExecutor final : public SqlExecutor {
+public:
+    SqlDefaultExecutor(OperationContext* opCtx, const std::string& databaseName, const std::string& sql)
+        : _databaseName(databaseName), _sql(sql) {
+        _opCtx = opCtx;
     }
-
-    PgScopedMemoryContext(PgScopedMemoryContext&&) = delete;
-    PgScopedMemoryContext& operator=(PgScopedMemoryContext&&) = delete;
-
-private:
-    MemoryContext _memCtx;
-};
-
-class SqlCompositeExecutor final : public SqlExecutor {
-public:
-    SqlCompositeExecutor(const std::vector<SqlExecutor*>& executors)
-        : _executors{std::move(executors)} {}
 
     void execute(SqlReplySender* replySender) override {
-        for(auto const& it: _executors) {
-            it->execute(replySender);
+        PgScopedMemoryContext memCtx("mongo_sql_parsing");
+        PgQueryInternalParsetreeAndError rawResult = pg_query_raw_parse(_sql.c_str());
+        ON_BLOCK_EXIT([&] { free(rawResult.stderr_buffer); });  // TODO wrap this in a type dtor.
+        if (rawResult.error) {
+            ON_BLOCK_EXIT(
+                [&] { pg_query_free_error(rawResult.error); });  // TODO wrap this in a type dtor.
+
+            uasserted(70010,
+                        str::stream() << "Error raw parsing SQL at " << rawResult.error->cursorpos
+                                    << ": "
+                                    << rawResult.error->message);
         }
+
+        // TODO: planner should be injected in...
+        auto planner = makeSqlPlanner(_opCtx, _databaseName);
+
+        for (ListCell* stmtCell = list_head(rawResult.tree); stmtCell; stmtCell = lnext(stmtCell)) {
+            invariant(IsA(stmtCell->data.ptr_value, RawStmt));
+            auto rawStmt = castNode(RawStmt, stmtCell->data.ptr_value);
+
+            auto executor = planner->plan(rawStmt);
+            executor->execute(replySender);
+        }
+        
     }
 
 private:
-    const std::vector<SqlExecutor*> _executors;
+    /**
+     * An RAII object that enters and exits a pg_query MemoryContext while in scope.
+     */
+    class PgScopedMemoryContext {
+    public:
+        explicit PgScopedMemoryContext(const char* name)
+            : _memCtx(pg_query_enter_memory_context(name)) {}
+
+        ~PgScopedMemoryContext() {
+            pg_query_exit_memory_context(_memCtx);
+        }
+
+        PgScopedMemoryContext(PgScopedMemoryContext&&) = delete;
+        PgScopedMemoryContext& operator=(PgScopedMemoryContext&&) = delete;
+
+    private:
+        MemoryContext _memCtx;
+    };
+
+    OperationContext* _opCtx;
+    const std::string _databaseName;
+    const std::string _sql;
 };
 }
-
 
 void SqlDummyExecutor::execute(SqlReplySender* replySender) {
     // Dummy data
@@ -131,31 +156,6 @@ void SqlInsertExecutor::execute(SqlReplySender* replySender) {
 }
 
 std::unique_ptr<SqlExecutor> makeSqlExecutor(OperationContext* opCtx, const std::string& databaseName, const std::string& sql) {
-    PgScopedMemoryContext memCtx("mongo_sql_parsing");
-    PgQueryInternalParsetreeAndError rawResult = pg_query_raw_parse(sql.c_str());
-    ON_BLOCK_EXIT([&] { free(rawResult.stderr_buffer); });  // TODO wrap this in a type dtor.
-    if (rawResult.error) {
-        ON_BLOCK_EXIT(
-            [&] { pg_query_free_error(rawResult.error); });  // TODO wrap this in a type dtor.
-
-        uasserted(70010,
-                    str::stream() << "Error raw parsing SQL at " << rawResult.error->cursorpos
-                                << ": "
-                                << rawResult.error->message);
-    }
-
-    auto planner = makeSqlPlanner(opCtx, databaseName);
-
-    //TODO this should probably be vector<std:unique_ptr<SqlExecutor>>, but I can't make that work...
-    std::vector<SqlExecutor*> executors;
-    for (ListCell* stmtCell = list_head(rawResult.tree); stmtCell; stmtCell = lnext(stmtCell)) {
-        invariant(IsA(stmtCell->data.ptr_value, RawStmt));
-        auto rawStmt = castNode(RawStmt, stmtCell->data.ptr_value);
-
-        auto executor = planner->plan(rawStmt);
-        executors.push_back(executor);
-    }
-    
-    return std::make_unique<SqlCompositeExecutor>(executors);
+    return std::make_unique<SqlDefaultExecutor>(opCtx, databaseName, sql);
 }
 }
