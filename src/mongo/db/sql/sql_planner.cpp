@@ -58,10 +58,12 @@ public:
             _opCtx = opCtx;
         }
 
-    std::unique_ptr<SqlExecutor> plan(RawStmt *rawStmt) {
-        switch(nodeTag(rawStmt->stmt)) {
+    std::unique_ptr<SqlExecutor> plan(Node *node) {
+        switch(nodeTag(node)) {
+            case T_RawStmt:
+                return plan(((RawStmt*)node)->stmt);
             case T_InsertStmt:
-                return planInsert((InsertStmt*)rawStmt->stmt);
+                return planInsert((InsertStmt*)node);
             default:
                 return std::make_unique<SqlDummyExecutor>();
         }

@@ -77,10 +77,9 @@ public:
         auto planner = makeSqlPlanner(_opCtx, _databaseName);
 
         for (ListCell* stmtCell = list_head(rawResult.tree); stmtCell; stmtCell = lnext(stmtCell)) {
-            invariant(IsA(stmtCell->data.ptr_value, RawStmt));
-            auto rawStmt = castNode(RawStmt, stmtCell->data.ptr_value);
+            auto node = castNode(Node, stmtCell->data.ptr_value);
 
-            auto executor = planner->plan(rawStmt);
+            auto executor = planner->plan(node);
             executor->execute(replySender);
         }
         
@@ -111,6 +110,8 @@ private:
     const std::string _sql;
 };
 }
+
+/* ------------------------- SqlDummyExecutor ----------------------------- */
 
 void SqlDummyExecutor::execute(SqlReplySender* replySender) {
     // Dummy data
@@ -147,6 +148,8 @@ void SqlDummyExecutor::execute(SqlReplySender* replySender) {
     replySender->sendCommandComplete(str::stream() << "SELECT " << replySender->nRowsSent());
 }
 
+/* ------------------------- SqlInsertExecutor ----------------------------- */
+
 SqlInsertExecutor::SqlInsertExecutor(const std::string& databaseName, const std::string& collectionName, BSONObj obj) {
     _obj = obj;
 }
@@ -154,6 +157,8 @@ SqlInsertExecutor::SqlInsertExecutor(const std::string& databaseName, const std:
 void SqlInsertExecutor::execute(SqlReplySender* replySender) {
     replySender->sendEmptyQueryResponse();
 }
+
+/* ------------------------- makeSqlExecutor ----------------------------- */
 
 std::unique_ptr<SqlExecutor> makeSqlExecutor(OperationContext* opCtx, const std::string& databaseName, const std::string& sql) {
     return std::make_unique<SqlDefaultExecutor>(opCtx, databaseName, sql);

@@ -34,16 +34,29 @@
 
 namespace mongo {
 
+/**
+ * SqlExecutor is responsible for sending replies. There are specialized implementations
+ * of SqlExecutor to handle the different types of executions required.
+ */
 class SqlExecutor {
 public:
+    /**
+     * execute performs the execution using the replySender to output its results.
+     */ 
     virtual void execute(SqlReplySender* replySender) = 0;
 };
 
+/**
+ * SqlDummyExecutor is a stub implemenation that returns dummy data.
+ */ 
 class SqlDummyExecutor final : public SqlExecutor {
 public:
     void execute(SqlReplySender* replySender);
 };
 
+/**
+ * SqlInsertExecutor inserts the data provided in the constructor to the specified database and collection.
+ */ 
 class SqlInsertExecutor final : public SqlExecutor {
 public:
     SqlInsertExecutor(const std::string& databaseName, const std::string& collectionName, BSONObj obj);
@@ -53,6 +66,9 @@ private:
     BSONObj _obj;
 };
 
+/**
+ * makeSqlExecutor creates an executor.
+ */
 std::unique_ptr<SqlExecutor> makeSqlExecutor(
     OperationContext* opCtx,
     const std::string& databaseName,

@@ -44,16 +44,25 @@ extern "C" {
 
 namespace mongo {
 
+/**
+ * SqlPlanner is responsible for create executors from a postgres RawStmt.
+ */
 class SqlPlanner {
 public:
     ~SqlPlanner() = default;  // Never destroyed polymorphically.
 
-    virtual std::unique_ptr<SqlExecutor> plan(RawStmt *rawStmt) = 0;
+    /**
+     * plan takes a RawStmt and creates a plan for execution, ultimately returning a SqlExecutor.
+     */ 
+    virtual std::unique_ptr<SqlExecutor> plan(Node *node) = 0;
 
 protected:
     SqlPlanner() = default;
     SqlPlanner(SqlPlanner&&) = delete;
 };
 
+/**
+ * makeSqlPlanner creates a SqlPlanner.
+ */ 
 std::unique_ptr<SqlPlanner> makeSqlPlanner(OperationContext* opCtx, const std::string& databaseName);
 }
