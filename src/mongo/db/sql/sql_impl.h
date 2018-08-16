@@ -107,14 +107,6 @@ protected:
 };
 
 /**
- * This is used by the PGSQL wire interface.
- */
-void runSQL2(OperationContext* opCtx,
-             const std::string& dbName,
-             const std::string& sql,
-             SqlReplySender* replySender);
-
-/**
  * This is used by the "sql" command.
  * It will probably go away soon.
  */

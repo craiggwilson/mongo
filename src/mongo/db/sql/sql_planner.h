@@ -28,34 +28,32 @@
 
 #pragma once
 
-#include "mongo/db/jsobj.h"
+#include <memory>
+#include <string>
+
 #include "mongo/db/operation_context.h"
-#include "mongo/db/sql/sql_impl.h"
+#include "mongo/db/sql/sql_executor.h"
+
+// This is gross, but they aren't doing it in their headers so we need to include them like this.
+// Also they are really macro heavy so this needs to be included *after* all of our headers.
+extern "C" {
+#include <postgres.h>  // This needs to be first.
+
+#include <nodes/parsenodes.h>
+}
 
 namespace mongo {
 
-class SqlExecutor {
+class SqlPlanner {
 public:
-    virtual void execute(SqlReplySender* replySender) = 0;
+    ~SqlPlanner() = default;  // Never destroyed polymorphically.
+
+    virtual SqlExecutor* plan(RawStmt *rawStmt) = 0;
+
+protected:
+    SqlPlanner() = default;
+    SqlPlanner(SqlPlanner&&) = delete;
 };
 
-class SqlDummyExecutor final : public SqlExecutor {
-public:
-    void execute(SqlReplySender* replySender);
-};
-
-class SqlInsertExecutor final : public SqlExecutor {
-public:
-    SqlInsertExecutor(const std::string& databaseName, const std::string& collectionName, BSONObj obj);
-
-    void execute(SqlReplySender* replySender);
-private:
-    BSONObj _obj;
-};
-
-std::unique_ptr<SqlExecutor> makeSqlExecutor(
-    OperationContext* opCtx,
-    const std::string& databaseName,
-    const std::string& sql
-);
+std::unique_ptr<SqlPlanner> makeSqlPlanner(OperationContext* opCtx, const std::string& databaseName);
 }

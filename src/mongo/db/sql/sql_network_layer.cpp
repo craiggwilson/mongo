@@ -31,6 +31,7 @@
 #include "mongo/platform/basic.h"
 
 #include "mongo/db/sql/sql_network_layer.h"
+#include "mongo/db/sql/sql_executor.h"
 
 #include "mongo/db/sql/sql_impl.h"
 #include "mongo/util/net/ssl_options.h"
@@ -362,7 +363,8 @@ public:
 
             {
                 auto opCtx = cc().makeOperationContext();
-                runSQL2(opCtx.get(), clientParams.find("database")->second, query, &replySender);
+                auto executor = makeSqlExecutor(opCtx.get(), clientParams.find("database")->second, query);
+                executor->execute(&replySender);
             }
 
             invariant(!replySender.hasIncompleteCommand());

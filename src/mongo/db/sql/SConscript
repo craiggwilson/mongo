@@ -12,6 +12,7 @@ env.Library(
     'sql_executor.cpp',
     'sql_impl.cpp',
     'sql_network_layer.cpp',
+    'sql_planner.cpp',
     ],
     LIBDEPS=[
         # These are copied directly from mongodmain and should probably be pared down at some point.

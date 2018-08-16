@@ -34,6 +34,7 @@
 #include "mongo/db/operation_context.h"
 #include "mongo/db/sql/sql_executor.h"
 #include "mongo/db/sql/sql_impl.h"
+#include "mongo/db/sql/sql_planner.h"
 #include "mongo/db/jsobj.h"
 
 #include <pg_query.h>
@@ -50,74 +51,7 @@ extern "C" {
 namespace mongo {
 
 namespace {
-
-class SqlCompositeExecutor final : public SqlExecutor {
-public:
-    SqlCompositeExecutor(const std::vector<SqlExecutor*>& executors)
-        : _executors{std::move(executors)} {}
-
-    void execute(SqlReplySender* replySender) override {
-        for(auto const& it: _executors) {
-            it->execute(replySender);
-        }
-    }
-
-private:
-    const std::vector<SqlExecutor*> _executors;
-};
-
-class SqlDummyExecutor final : public SqlExecutor {
-public:
-    void execute(SqlReplySender* replySender) override {
-        // Dummy data
-        const auto colls = std::vector<std::string>{"a", "b", "c"};
-        const size_t nRows = 5;
-
-        {
-            // Prepare the header.
-            auto rowDesc = std::vector<SqlColumnDesc>();
-            for (auto&& collName : colls) {
-                rowDesc.push_back(SqlColumnDesc{collName});
-            }
-            replySender->sendRowDesc(rowDesc);
-        }
-
-
-        for (size_t rowNum = 0; rowNum < nRows; rowNum++) {
-            const size_t base = rowNum * colls.size();
-            std::vector<boost::optional<std::string>> rowData;
-            for (size_t collNum = 0; collNum < colls.size(); collNum++) {
-                const auto data = base + collNum;
-                if (data % 5 == 0) {
-                    // Simulate a null.
-                    rowData.emplace_back(boost::none);
-                    continue;
-                }
-
-                rowData.emplace_back(std::to_string(data));
-            }
-
-            replySender->sendDataRow(rowData);
-        }
-
-        replySender->sendCommandComplete(str::stream() << "SELECT " << replySender->nRowsSent());
-    }
-};
-
-class SqlInsertExecutor final : public SqlExecutor {
-public:
-    SqlInsertExecutor(std::string databaseName, std::string collectionName, BSONObj obj) {
-        _obj = obj;
-    }
-
-    void execute(SqlReplySender* replySender) override {
-        replySender->sendEmptyQueryResponse();
-    }
-private:
-    BSONObj _obj;
-};
-
-/**
+    /**
  * An RAII object that enters and exits a pg_query MemoryContext while in scope.
  */
 class PgScopedMemoryContext {
@@ -135,6 +69,65 @@ public:
 private:
     MemoryContext _memCtx;
 };
+
+class SqlCompositeExecutor final : public SqlExecutor {
+public:
+    SqlCompositeExecutor(const std::vector<SqlExecutor*>& executors)
+        : _executors{std::move(executors)} {}
+
+    void execute(SqlReplySender* replySender) override {
+        for(auto const& it: _executors) {
+            it->execute(replySender);
+        }
+    }
+
+private:
+    const std::vector<SqlExecutor*> _executors;
+};
+}
+
+
+void SqlDummyExecutor::execute(SqlReplySender* replySender) {
+    // Dummy data
+    const auto colls = std::vector<std::string>{"a", "b", "c"};
+    const size_t nRows = 5;
+
+    {
+        // Prepare the header.
+        auto rowDesc = std::vector<SqlColumnDesc>();
+        for (auto&& collName : colls) {
+            rowDesc.push_back(SqlColumnDesc{collName});
+        }
+        replySender->sendRowDesc(rowDesc);
+    }
+
+
+    for (size_t rowNum = 0; rowNum < nRows; rowNum++) {
+        const size_t base = rowNum * colls.size();
+        std::vector<boost::optional<std::string>> rowData;
+        for (size_t collNum = 0; collNum < colls.size(); collNum++) {
+            const auto data = base + collNum;
+            if (data % 5 == 0) {
+                // Simulate a null.
+                rowData.emplace_back(boost::none);
+                continue;
+            }
+
+            rowData.emplace_back(std::to_string(data));
+        }
+
+        replySender->sendDataRow(rowData);
+    }
+
+    replySender->sendCommandComplete(str::stream() << "SELECT " << replySender->nRowsSent());
+}
+
+SqlInsertExecutor::SqlInsertExecutor(const std::string& databaseName, const std::string& collectionName, BSONObj obj) {
+    _obj = obj;
+}
+
+void SqlInsertExecutor::execute(SqlReplySender* replySender) {
+    replySender->sendEmptyQueryResponse();
 }
 
 std::unique_ptr<SqlExecutor> makeSqlExecutor(OperationContext* opCtx, const std::string& databaseName, const std::string& sql) {
@@ -151,20 +144,16 @@ std::unique_ptr<SqlExecutor> makeSqlExecutor(OperationContext* opCtx, const std:
                                 << rawResult.error->message);
     }
 
+    auto planner = makeSqlPlanner(opCtx, databaseName);
+
     //TODO this should probably be vector<std:unique_ptr<SqlExecutor>>, but I can't make that work...
     std::vector<SqlExecutor*> executors;
     for (ListCell* stmtCell = list_head(rawResult.tree); stmtCell; stmtCell = lnext(stmtCell)) {
         invariant(IsA(stmtCell->data.ptr_value, RawStmt));
         auto rawStmt = castNode(RawStmt, stmtCell->data.ptr_value);
 
-        switch(rawStmt->stmt->type) {
-            case T_InsertStmt:
-                executors.push_back(new SqlInsertExecutor(databaseName, "temp", BSON("a" << 1 << "b" << 1)));
-                break;
-            default:
-                executors.push_back(new SqlDummyExecutor());
-                break;
-        }
+        auto executor = planner->plan(rawStmt);
+        executors.push_back(executor);
     }
     
     return std::make_unique<SqlCompositeExecutor>(executors);

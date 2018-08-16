@@ -70,15 +70,6 @@ private:
     MemoryContext _memCtx;
 };
 
-void runSQL2(OperationContext* opCtx,
-             const std::string& dbName,
-             const std::string& sql,
-             SqlReplySender* replySender) {
-    
-    auto executor = makeSqlExecutor(opCtx, dbName, sql);
-    executor->execute(replySender);
-}
-
 std::vector<BSONObj> runSQL(OperationContext* opCtx,
                             const std::string& dbName,
                             const std::string& sql) {
